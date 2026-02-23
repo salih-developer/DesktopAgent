@@ -1,138 +1,138 @@
 # DesktopAgent
 
-Ollama destekli, Windows masaüstü AI ajan uygulaması. Doğal dilde verilen görevleri anlayıp, dosya işlemleri, terminal komutları ve arama gibi araçları otonom şekilde kullanarak yerine getirir.
+DesktopAgent is an Ollama-powered Windows desktop AI agent. It understands natural language tasks and can complete them autonomously by using tools such as file operations, terminal commands, and search.
 
 ![.NET](https://img.shields.io/badge/.NET-9.0-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey)
 ![LLM](https://img.shields.io/badge/LLM-Ollama-green)
 
-## Özellikler
+## Features
 
-- **Ajansal AI Döngüsü** — LLM, görevi tamamlayana kadar araçları iteratif olarak kullanır
-- **11 Yerleşik Araç** — Dosya okuma/yazma/düzenleme, terminal, dosya arama, dizin listeleme ve daha fazlası
-- **Gerçek Zamanlı Çıktı** — Renk kodlu çıktı ile düşünme, araç çağrısı, sonuç ve yanıt adımları
-- **Yerel LLM** — Ollama ile tamamen yerel çalışır, veri dışarı çıkmaz
-- **İptal Desteği** — Çalışan görevler kullanıcı tarafından iptal edilebilir
-- **Ayarlar Paneli** — Uygulama içinden Ollama URL, model seçimi, workspace dizini ve system prompt yapılandırılabilir
+- **Agentic AI Loop** - The LLM uses tools iteratively until the task is completed.
+- **11 Built-in Tools** - File read/write/edit, terminal, file search, directory listing, and more.
+- **Real-time Output** - Color-coded output for thinking, tool call, tool result, and final response steps.
+- **Local LLM** - Runs fully local with Ollama; your data does not leave your machine.
+- **Cancellation Support** - Running tasks can be canceled by the user.
+- **Settings Panel** - Configure Ollama URL, model selection, workspace path, and system prompt from the app.
 
-## Gereksinimler
+## Requirements
 
 - [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
-- [Ollama](https://ollama.com/) (yerel olarak çalışır durumda)
+- [Ollama](https://ollama.com/) (running locally)
 - Windows 10/11
 
-## Kurulum
+## Installation
 
 ```bash
-# Repoyu klonla
+# Clone the repository
 git clone <repo-url>
 cd DesktopAgent
 
-# Derle
+# Build
 dotnet build DesktopAgent.csproj
 
-# Çalıştır
+# Run
 dotnet run --project DesktopAgent.csproj
 ```
 
-> Ollama'nın `http://localhost:11434` adresinde çalışır durumda olduğundan emin olun.
+> Make sure Ollama is running at `http://localhost:11434`.
 
-## Kullanım
+## Usage
 
-1. Uygulamayı başlatın
-2. Metin kutusuna görevinizi yazın (ör: *"Bir ASP.NET Web API projesi oluştur"*)
-3. Enter'a basın veya **Gönder** butonuna tıklayın
-4. Ajan düşünecek, gerekli araçları çağıracak ve sonucu gösterecektir
+1. Start the application.
+2. Enter your task in the message box (for example: *"Create an ASP.NET Web API project"*).
+3. Press Enter or click the **Send** button.
+4. The agent will think, call required tools, and show the result.
 
-### Ayarlar Paneli
+### Settings Panel
 
-Sağ üst köşedeki **⚙** butonuna tıklayarak ayarlar panelini açabilirsiniz:
+You can open the settings panel from the top-right **gear** button.
 
-| Alan | Açıklama |
+| Field | Description |
 |------|----------|
-| **Ollama URL** | Ollama sunucu adresi (ör: `http://localhost:11434`). "Listele" butonu ile bağlantıyı test edip modelleri çekebilirsiniz. |
-| **Model** | Ollama'dan çekilen model listesinden seçim yapılır. Seçilen model tüm sonraki görevlerde kullanılır. |
-| **Workspace** | Ajanın çalışacağı varsayılan dizin. "Gözat..." ile klasör seçilir. |
-| **System Prompt** | Ajana verilen temel talimat metni. Ajanın davranışını, bildiği dilleri ve araç kullanım formatını belirler. |
+| **Ollama URL** | Ollama server address (for example: `http://localhost:11434`). Use the "List" button to test the connection and fetch models. |
+| **Model** | Select a model from the Ollama model list. The selected model is used for all next tasks. |
+| **Workspace** | Default working directory for the agent. Select a folder with "Browse...". |
+| **System Prompt** | Base instruction text given to the agent. It defines behavior, known languages, and tool usage format. |
 
-Ayarlar **Kaydet** ile `%APPDATA%/OllamaWin/settings.json` dosyasına kalıcı olarak yazılır ve anında uygulanır.
+Settings are saved persistently to `%APPDATA%/OllamaWin/settings.json` when you click **Save**, and applied immediately.
 
-### Çıktı Renk Kodları
+### Output Color Codes
 
-| Renk | Anlam |
+| Color | Meaning |
 |------|-------|
-| Mavi | Düşünme / Planlama |
-| Indigo | Araç Çağrısı |
-| Yeşil | Araç Sonucu |
-| Koyu Gri | Final Yanıt |
-| Kırmızı | Hata |
-| Turuncu | Sistem Mesajı |
+| Blue | Thinking / Planning |
+| Indigo | Tool Call |
+| Green | Tool Result |
+| Dark Gray | Final Response |
+| Red | Error |
+| Orange | System Message |
 
-## Araçlar
+## Tools
 
-| Araç | Açıklama | Parametreler |
+| Tool | Description | Parameters |
 |------|----------|-------------|
-| `read_file` | Dosya içeriğini okur | `path` |
-| `write_file` | Dosya yazar | `path`, `content` |
-| `edit_file` | Bul-değiştir yapar | `path`, `search`, `replace` |
-| `list_files` | Dizin içeriğini listeler | `path?`, `recursive?` |
-| `run_terminal` | Terminal komutu çalıştırır | `command`, `cwd?` |
-| `search_in_files` | Regex ile dosyalarda arar | `query`, `include?` |
-| `create_directory` | Dizin oluşturur | `path` |
-| `list_tools` | Mevcut araçları listeler | — |
+| `read_file` | Reads file content | `path` |
+| `write_file` | Writes a file | `path`, `content` |
+| `edit_file` | Performs find-and-replace | `path`, `search`, `replace` |
+| `list_files` | Lists directory contents | `path?`, `recursive?` |
+| `run_terminal` | Runs a terminal command | `command`, `cwd?` |
+| `search_in_files` | Searches files with regex | `query`, `include?` |
+| `create_directory` | Creates a directory | `path` |
+| `list_tools` | Lists available tools | - |
 
-## Yapılandırma
+## Configuration
 
-Ayarlar `%APPDATA%/OllamaWin/settings.json` dosyasında saklanır:
+Settings are stored in `%APPDATA%/OllamaWin/settings.json`:
 
 ```json
 {
   "OllamaBaseUrl": "http://localhost:11434",
   "WorkspacePath": "D:\\AI\\llmtest",
   "SelectedModel": "qwen3-coder-32k",
-  "SystemPrompt": "Sen guclu bir yazilim gelistirme ajanisin..."
+  "SystemPrompt": "You are a capable software development agent..."
 }
 ```
 
-Tüm ayarlar uygulama içindeki ayarlar panelinden de değiştirilebilir.
+All settings can also be changed from the in-app settings panel.
 
-## Mimari
+## Architecture
 
+```text
+User -> AgentForm -> AgentService -> OllamaClient -> Ollama LLM
+                       |
+                       -> ToolRegistry -> BasicTools (file, terminal, search...)
 ```
-Kullanıcı → AgentForm → AgentService → OllamaClient → Ollama LLM
-                              ↕
-                        ToolRegistry → BasicTools (dosya, terminal, arama...)
-```
 
-**Ajansal döngü:**
-1. Kullanıcı görev girer
-2. AgentService, system prompt + görev ile LLM'e istek atar
-3. LLM araç çağrısı (`{"tool":"...", "args":{...}}`) veya final yanıt (`[YANIT]`) döner
-4. Araç çağrısı varsa: ToolRegistry çalıştırır, sonucu LLM'e geri besler
-5. `[YANIT]` gelene kadar döngü devam eder
+**Agentic loop:**
+1. User enters a task.
+2. AgentService sends a request to the LLM with system prompt + task.
+3. The LLM returns either a tool call (`{"tool":"...", "args":{...}}`) or a final response (`[YANIT]`).
+4. If there is a tool call: ToolRegistry executes it and sends the result back to the LLM.
+5. The loop continues until `[YANIT]` is produced.
 
-## Proje Yapısı
+## Project Structure
 
-```
+```text
 DesktopAgent/
-├── Program.cs                 # Giriş noktası, loglama
-├── AgentForm.cs               # UI, kullanıcı etkileşimi ve ayarlar paneli
-├── AgentForm.Designer.cs      # WinForms tasarımcı kodu
-├── Services/
-│   ├── AgentService.cs        # Ajansal döngü (system prompt dışarıdan ayarlanabilir)
-│   ├── ILLMClient.cs          # LLM istemci arayüzü
-│   ├── OllamaClient.cs        # Ollama API istemcisi
-│   └── Tools/
-│       ├── BasicTools.cs      # Araç implementasyonları
-│       ├── ListToolsTool.cs   # Araç listeleme
-│       └── ToolRegistry.cs    # Araç kaydı
-├── Utils/
-│   ├── AppSettingsStore.cs    # Ayar yönetimi (URL, model, workspace, system prompt)
-│   ├── ProcessRunner.cs       # Komut çalıştırma
-│   └── WorkspaceContext.cs    # Workspace yönetimi
-└── DesktopAgent.csproj        # .NET 9.0 proje dosyası
+|-- Program.cs                 # Entry point, logging
+|-- AgentForm.cs               # UI, user interaction, and settings panel
+|-- AgentForm.Designer.cs      # WinForms designer code
+|-- Services/
+|   |-- AgentService.cs        # Agentic loop (system prompt can be set externally)
+|   |-- ILLMClient.cs          # LLM client interface
+|   |-- OllamaClient.cs        # Ollama API client
+|   `-- Tools/
+|       |-- BasicTools.cs      # Tool implementations
+|       |-- ListToolsTool.cs   # Tool listing
+|       `-- ToolRegistry.cs    # Tool registry
+|-- Utils/
+|   |-- AppSettingsStore.cs    # Settings management (URL, model, workspace, system prompt)
+|   |-- ProcessRunner.cs       # Command execution
+|   `-- WorkspaceContext.cs    # Workspace management
+`-- DesktopAgent.csproj        # .NET 9.0 project file
 ```
 
-## Lisans
+## License
 
-Bu proje özel kullanım içindir.
+This project is for private use.

@@ -1,95 +1,95 @@
 # DesktopAgent - Project Guide
 
 ## Overview
-Windows Forms tabanlı bir AI masaüstü ajan uygulaması. Ollama üzerinden yerel LLM modelleri ile çalışır. Kullanıcı doğal dilde görev verir, ajan araçları (tool) kullanarak dosya okuma/yazma, terminal komutu çalıştırma, dosya arama gibi işlemleri otonom şekilde yürütür.
+DesktopAgent is a Windows Forms based desktop AI agent application. It works with local LLM models through Ollama. The user provides tasks in natural language, and the agent executes them autonomously using tools such as file read/write, terminal command execution, and file search.
 
 ## Tech Stack
 - **Framework:** .NET 9.0 (net9.0-windows)
 - **UI:** Windows Forms (WinForms)
-- **Dil:** C# 12+ (nullable enabled, implicit usings)
-- **LLM:** Ollama (varsayılan: http://localhost:11434)
-- **Paketler:** Serilog (loglama), Newtonsoft.Json, System.Text.Json
+- **Language:** C# 12+ (nullable enabled, implicit usings)
+- **LLM:** Ollama (default: `http://localhost:11434`)
+- **Packages:** Serilog (logging), Newtonsoft.Json, System.Text.Json
 
 ## Project Structure
-```
+```text
 DesktopAgent/
-├── Program.cs                    # Uygulama giriş noktası, Serilog yapılandırması
-├── AgentForm.cs                  # Ana UI formu, kullanıcı etkileşimi ve ayarlar paneli
-├── AgentForm.Designer.cs         # WinForms tasarımcı kodu
-├── Services/
-│   ├── AgentService.cs           # Ajanın çalışma döngüsü (agentic loop)
-│   ├── ILLMClient.cs             # LLM istemci arayüzü
-│   ├── OllamaClient.cs           # Ollama HTTP API istemcisi
-│   └── Tools/
-│       ├── BasicTools.cs         # Tüm araç implementasyonları (9 araç)
-│       ├── ListToolsTool.cs      # Araç listeleme aracı
-│       └── ToolRegistry.cs       # Araç kaydı ve yönlendirmesi
-├── Utils/
-│   ├── AppSettingsStore.cs       # Ayar yükleme/kaydetme (%APPDATA%)
-│   ├── ProcessRunner.cs          # Komut çalıştırma (180s timeout)
-│   └── WorkspaceContext.cs       # Çalışma dizini yönetimi
-└── DesktopAgent.csproj           # Proje yapılandırması
+|-- Program.cs                    # App entry point, Serilog configuration
+|-- AgentForm.cs                  # Main UI form, user interactions, settings panel
+|-- AgentForm.Designer.cs         # WinForms designer code
+|-- Services/
+|   |-- AgentService.cs           # Agent run loop (agentic loop)
+|   |-- ILLMClient.cs             # LLM client interface
+|   |-- OllamaClient.cs           # Ollama HTTP API client
+|   `-- Tools/
+|       |-- BasicTools.cs         # All tool implementations (9 tools)
+|       |-- ListToolsTool.cs      # Tool listing tool
+|       `-- ToolRegistry.cs       # Tool registration and dispatch
+|-- Utils/
+|   |-- AppSettingsStore.cs       # Settings load/save (%APPDATA%)
+|   |-- ProcessRunner.cs          # Command execution (180s timeout)
+|   `-- WorkspaceContext.cs       # Working directory management
+`-- DesktopAgent.csproj           # Project configuration
 ```
 
 ## Architecture
-- **AgentForm** → Kullanıcı mesajı alır, AgentService'e gönderir. Ayarlar paneli (⚙ butonu) ile Ollama URL, model, workspace ve system prompt yapılandırılır.
-- **AgentService** → Agentic loop: LLM'e mesaj gönderir, yanıtı parse eder, araç çağrısı varsa çalıştırır, sonucu geri besler. `[YANIT]` etiketiyle döngü biter. System prompt dışarıdan `SetSystemPrompt()` ile değiştirilebilir.
-- **ToolRegistry** → ITool arayüzünü implemente eden araçları kaydeder ve çalıştırır
-- **OllamaClient** → Ollama REST API ile iletişim kurar. `SetBaseUrl()` ile URL değiştirilebilir. `ListModelsAsync()` ile mevcut modeller listelenebilir.
+- **AgentForm** -> Receives user messages and sends them to AgentService. The settings panel (gear button) configures Ollama URL, model, workspace, and system prompt.
+- **AgentService** -> Agentic loop: sends prompts to the LLM, parses replies, executes tool calls, and feeds tool output back. The loop ends when `[YANIT]` is returned. The system prompt can be changed externally via `SetSystemPrompt()`.
+- **ToolRegistry** -> Registers and executes tools implementing the `ITool` interface.
+- **OllamaClient** -> Communicates with Ollama REST API. URL can be changed with `SetBaseUrl()`. Available models can be listed with `ListModelsAsync()`.
 
 ## Key Conventions
-- Tüm UI metinleri ve system prompt Türkçe
-- Araç çağrıları JSON formatında: `{"tool":"tool_name","args":{...}}`
-- Final yanıt `[YANIT]` etiketi ile biter
-- Relative path'ler workspace dizinine göre çözümlenir (PathHelper.Resolve)
-- Ayarlar `%APPDATA%/OllamaWin/settings.json` dosyasında saklanır
-- Model, ayarlar panelinden seçilir (fallback: `qwen3-coder-32k`)
-- System prompt, ayarlar panelinden düzenlenebilir
-- Loglar: `<AppDir>/logs/desktop-agent-YYYY-MM-DD.log`
+- All UI text and default system prompt are Turkish.
+- Tool calls use JSON format: `{"tool":"tool_name","args":{...}}`
+- Final response ends with `[YANIT]`.
+- Relative paths are resolved against the workspace directory (`PathHelper.Resolve`).
+- Settings are stored in `%APPDATA%/OllamaWin/settings.json`.
+- Model is selected in the settings panel (fallback: `qwen3-coder-32k`).
+- System prompt is editable in the settings panel.
+- Logs are written to `<AppDir>/logs/desktop-agent-YYYY-MM-DD.log`.
 
 ## Settings (AppSettings)
-| Alan | Varsayılan | Açıklama |
+| Field | Default | Description |
 |------|-----------|----------|
-| `OllamaBaseUrl` | `http://localhost:11434` | Ollama sunucu adresi |
-| `WorkspacePath` | `D:\AI\llmtest` | Varsayılan çalışma dizini |
-| `SelectedModel` | `""` (boşsa fallback: `qwen3-coder-32k`) | Kullanılacak LLM modeli |
-| `SystemPrompt` | Türkçe ajan talimatı | Ajana verilen temel system prompt |
+| `OllamaBaseUrl` | `http://localhost:11434` | Ollama server URL |
+| `WorkspacePath` | `D:\AI\llmtest` | Default working directory |
+| `SelectedModel` | `""` (falls back to `qwen3-coder-32k`) | LLM model to use |
+| `SystemPrompt` | Turkish agent instructions | Base system prompt text for the agent |
 
-## Settings Panel (⚙ Butonu)
-Header'daki ⚙ butonuna tıklanınca overlay olarak açılır:
-- **Ollama URL** — TextBox + "Listele" butonu (modelleri Ollama API'den çeker)
-- **Model** — ComboBox (DropDownList), Ollama'dan çekilen modeller listelenir
-- **Workspace** — TextBox (ReadOnly) + "Gözat..." butonu (FolderBrowserDialog)
-- **System Prompt** — Multiline TextBox (100px, scrollbar'lı)
-- **Kaydet** — Tüm ayarları kaydeder ve anında uygular
-- **Kapat** — Paneli kapatır (overlay'e tıklayarak da kapatılabilir)
+## Settings Panel (Gear Button)
+Clicking the gear button in the header opens an overlay panel:
+- **Ollama URL** - TextBox + "List" button (fetches models from Ollama API)
+- **Model** - ComboBox (DropDownList), populated from Ollama models
+- **Workspace** - TextBox (ReadOnly) + "Browse..." button (FolderBrowserDialog)
+- **System Prompt** - Multiline TextBox (100px, scrollbars enabled)
+- **Save** - Persists all settings and applies them immediately
+- **Close** - Closes the panel (also closes on overlay click)
 
 ## Available Tools
-| Araç | Açıklama |
+| Tool | Description |
 |------|----------|
-| `read_file` | Dosya içeriğini okur |
-| `write_file` | Dosya yazar |
-| `edit_file` | Dosyada bul-değiştir |
-| `list_files` | Dizin içeriğini listeler |
-| `run_terminal` | Terminal komutu çalıştırır |
-| `search_in_files` | Regex ile dosyalarda arar |
-| `create_directory` | Dizin oluşturur |
-| `list_tools` | Mevcut araçları listeler |
-| `get_diagnostics` | Diagnostik bilgisi (WinForms stub) |
-| `get_open_file_info` | Açık dosya bilgisi (WinForms stub) |
-| `insert_code` | Kod ekleme (VS Code only stub) |
+| `read_file` | Reads file content |
+| `write_file` | Writes a file |
+| `edit_file` | Find-and-replace in a file |
+| `list_files` | Lists directory content |
+| `run_terminal` | Executes terminal commands |
+| `search_in_files` | Regex search across files |
+| `create_directory` | Creates a directory |
+| `list_tools` | Lists available tools |
+| `get_diagnostics` | Diagnostic info (WinForms stub) |
+| `get_open_file_info` | Active editor info (WinForms stub) |
+| `insert_code` | Code insertion (VS Code only stub) |
 
-## Build & Run
+## Build and Run
 ```bash
 dotnet build DesktopAgent.csproj
 dotnet run --project DesktopAgent.csproj
 ```
-**Ön koşul:** Ollama'nın çalışır durumda olması gerekir.
+**Prerequisite:** Ollama must be running.
 
 ## UI Color Coding
-- **THINKING:** Mavi (3, 105, 161)
+- **THINKING:** Blue (3, 105, 161)
 - **TOOL_CALL:** Indigo (79, 70, 229)
-- **TOOL_RESULT:** Yeşil (22, 101, 52)
-- **RESPONSE:** Koyu gri (30, 41, 59)
-- **ERROR:** Kırmızı (185, 28, 28)
-- **SYSTEM:** Turuncu (180, 83, 9)
+- **TOOL_RESULT:** Green (22, 101, 52)
+- **RESPONSE:** Dark gray (30, 41, 59)
+- **ERROR:** Red (185, 28, 28)
+- **SYSTEM:** Orange (180, 83, 9)
