@@ -86,6 +86,7 @@ namespace DesktopAgent.Services
             }
 
             var json = await resp.Content.ReadFromJsonAsync<JsonElement>(options: _json, cancellationToken: ct);
+            Log.Information("Ollama chat response json", json);
             return json.GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
         }
 
