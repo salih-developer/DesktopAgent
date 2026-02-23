@@ -18,16 +18,21 @@ namespace DesktopAgent.Services
     {
         private readonly OllamaClient _ollama;
         private readonly ToolRegistry _tools;
+        private string _baseSystemPrompt;
 
-        private const string BaseSystemPrompt = @"Sen guclu bir yazilim gelistirme ajanisin.c#,html,css,jquery kullanabiliyorsun
-Arac cagirmak icin JSON kullan:
-{""tool"":""tool_name"",""args"":{...}}
-Final yanitini [YANIT] etiketi ile bitir.";
-
-        public AgentService(OllamaClient ollama, ToolRegistry tools)
+        public AgentService(OllamaClient ollama, ToolRegistry tools, string? baseSystemPrompt = null)
         {
             _ollama = ollama;
             _tools = tools;
+            _baseSystemPrompt = baseSystemPrompt ?? @"Sen guclu bir yazilim gelistirme ajanisin.c#,html,css,jquery kullanabiliyorsun
+Arac cagirmak icin JSON kullan:
+{""tool"":""tool_name"",""args"":{...}}
+Final yanitini [YANIT] etiketi ile bitir.";
+        }
+
+        public void SetSystemPrompt(string prompt)
+        {
+            _baseSystemPrompt = prompt;
         }
 
         public async IAsyncEnumerable<AgentStep> RunAsync(string model, string task, [EnumeratorCancellation] CancellationToken ct = default)
@@ -94,7 +99,7 @@ Final yanitini [YANIT] etiketi ile bitir.";
         private string BuildSystemPrompt()
         {
             var toolList = GetToolListCsv();
-            return BaseSystemPrompt + $@"
+            return _baseSystemPrompt + $@"
 
 Varsayilan workspace klasoru: {WorkspaceContext.CurrentPath}
 Mevcut tool'lar: {toolList}

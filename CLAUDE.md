@@ -14,7 +14,7 @@ Windows Forms tabanlı bir AI masaüstü ajan uygulaması. Ollama üzerinden yer
 ```
 DesktopAgent/
 ├── Program.cs                    # Uygulama giriş noktası, Serilog yapılandırması
-├── AgentForm.cs                  # Ana UI formu ve kullanıcı etkileşimi
+├── AgentForm.cs                  # Ana UI formu, kullanıcı etkileşimi ve ayarlar paneli
 ├── AgentForm.Designer.cs         # WinForms tasarımcı kodu
 ├── Services/
 │   ├── AgentService.cs           # Ajanın çalışma döngüsü (agentic loop)
@@ -32,10 +32,10 @@ DesktopAgent/
 ```
 
 ## Architecture
-- **AgentForm** → Kullanıcı mesajı alır, AgentService'e gönderir
-- **AgentService** → Agentic loop: LLM'e mesaj gönderir, yanıtı parse eder, araç çağrısı varsa çalıştırır, sonucu geri besler. `[YANIT]` etiketiyle döngü biter.
+- **AgentForm** → Kullanıcı mesajı alır, AgentService'e gönderir. Ayarlar paneli (⚙ butonu) ile Ollama URL, model, workspace ve system prompt yapılandırılır.
+- **AgentService** → Agentic loop: LLM'e mesaj gönderir, yanıtı parse eder, araç çağrısı varsa çalıştırır, sonucu geri besler. `[YANIT]` etiketiyle döngü biter. System prompt dışarıdan `SetSystemPrompt()` ile değiştirilebilir.
 - **ToolRegistry** → ITool arayüzünü implemente eden araçları kaydeder ve çalıştırır
-- **OllamaClient** → Ollama REST API ile iletişim kurar
+- **OllamaClient** → Ollama REST API ile iletişim kurar. `SetBaseUrl()` ile URL değiştirilebilir. `ListModelsAsync()` ile mevcut modeller listelenebilir.
 
 ## Key Conventions
 - Tüm UI metinleri ve system prompt Türkçe
@@ -43,8 +43,26 @@ DesktopAgent/
 - Final yanıt `[YANIT]` etiketi ile biter
 - Relative path'ler workspace dizinine göre çözümlenir (PathHelper.Resolve)
 - Ayarlar `%APPDATA%/OllamaWin/settings.json` dosyasında saklanır
-- Varsayılan model: `qwen3-coder-32k` (AgentForm.cs:61 - hardcoded)
+- Model, ayarlar panelinden seçilir (fallback: `qwen3-coder-32k`)
+- System prompt, ayarlar panelinden düzenlenebilir
 - Loglar: `<AppDir>/logs/desktop-agent-YYYY-MM-DD.log`
+
+## Settings (AppSettings)
+| Alan | Varsayılan | Açıklama |
+|------|-----------|----------|
+| `OllamaBaseUrl` | `http://localhost:11434` | Ollama sunucu adresi |
+| `WorkspacePath` | `D:\AI\llmtest` | Varsayılan çalışma dizini |
+| `SelectedModel` | `""` (boşsa fallback: `qwen3-coder-32k`) | Kullanılacak LLM modeli |
+| `SystemPrompt` | Türkçe ajan talimatı | Ajana verilen temel system prompt |
+
+## Settings Panel (⚙ Butonu)
+Header'daki ⚙ butonuna tıklanınca overlay olarak açılır:
+- **Ollama URL** — TextBox + "Listele" butonu (modelleri Ollama API'den çeker)
+- **Model** — ComboBox (DropDownList), Ollama'dan çekilen modeller listelenir
+- **Workspace** — TextBox (ReadOnly) + "Gözat..." butonu (FolderBrowserDialog)
+- **System Prompt** — Multiline TextBox (100px, scrollbar'lı)
+- **Kaydet** — Tüm ayarları kaydeder ve anında uygular
+- **Kapat** — Paneli kapatır (overlay'e tıklayarak da kapatılabilir)
 
 ## Available Tools
 | Araç | Açıklama |

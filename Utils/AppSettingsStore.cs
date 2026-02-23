@@ -6,6 +6,11 @@ public sealed class AppSettings
 {
     public string OllamaBaseUrl { get; set; } = "http://localhost:11434";
     public string WorkspacePath { get; set; } = @"D:\\AI\\llmtest";
+    public string SelectedModel { get; set; } = "";
+    public string SystemPrompt { get; set; } = @"Sen guclu bir yazilim gelistirme ajanisin.c#,html,css,jquery kullanabiliyorsun
+Arac cagirmak icin JSON kullan:
+{""tool"":""tool_name"",""args"":{...}}
+Final yanitini [YANIT] etiketi ile bitir.";
 }
 
 public static class AppSettingsStore

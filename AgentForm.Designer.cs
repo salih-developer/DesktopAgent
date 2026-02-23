@@ -10,17 +10,30 @@ namespace DesktopAgent
         private Panel headerPanel = null!;
         private Label sessionLabel = null!;
         private Label sessionArrowLabel = null!;
-        private Button addButton = null!;
+        private Button settingsButton = null!;
         private Panel composerPanel = null!;
         private Panel composerCard = null!;
         private TextBox messageTextBox = null!;
         private Panel composerFooterPanel = null!;
         private CheckBox askBeforeEditsCheckBox = null!;
-        private Label contextFileLabel = null!;
-        private Label usageLabel = null!;
-        private Button attachButton = null!;
-        private Button slashButton = null!;
         private Button sendButton = null!;
+
+        // Settings panel controls
+        private Panel settingsOverlayPanel = null!;
+        private Panel settingsInnerPanel = null!;
+        private Label settingsTitleLabel = null!;
+        private Label ollamaUrlLabel = null!;
+        private TextBox ollamaUrlTextBox = null!;
+        private Button fetchModelsButton = null!;
+        private Label modelLabel = null!;
+        private ComboBox modelComboBox = null!;
+        private Label workspaceLabel = null!;
+        private TextBox workspaceTextBox = null!;
+        private Button browseWorkspaceButton = null!;
+        private Label systemPromptLabel = null!;
+        private TextBox systemPromptTextBox = null!;
+        private Button saveSettingsButton = null!;
+        private Button closeSettingsButton = null!;
 
         /// <summary>
         ///  Clean up any resources being used.
@@ -47,22 +60,35 @@ namespace DesktopAgent
             headerPanel = new Panel();
             sessionLabel = new Label();
             sessionArrowLabel = new Label();
-            addButton = new Button();
+            settingsButton = new Button();
             composerPanel = new Panel();
             composerCard = new Panel();
             messageTextBox = new TextBox();
             composerFooterPanel = new Panel();
             askBeforeEditsCheckBox = new CheckBox();
-            contextFileLabel = new Label();
-            usageLabel = new Label();
-            attachButton = new Button();
-            slashButton = new Button();
             sendButton = new Button();
             rtbAgent = new RichTextBox();
+            settingsOverlayPanel = new Panel();
+            settingsInnerPanel = new Panel();
+            settingsTitleLabel = new Label();
+            ollamaUrlLabel = new Label();
+            ollamaUrlTextBox = new TextBox();
+            fetchModelsButton = new Button();
+            modelLabel = new Label();
+            modelComboBox = new ComboBox();
+            workspaceLabel = new Label();
+            workspaceTextBox = new TextBox();
+            browseWorkspaceButton = new Button();
+            systemPromptLabel = new Label();
+            systemPromptTextBox = new TextBox();
+            saveSettingsButton = new Button();
+            closeSettingsButton = new Button();
             headerPanel.SuspendLayout();
             composerPanel.SuspendLayout();
             composerCard.SuspendLayout();
             composerFooterPanel.SuspendLayout();
+            settingsOverlayPanel.SuspendLayout();
+            settingsInnerPanel.SuspendLayout();
             SuspendLayout();
             // 
             // headerPanel
@@ -70,7 +96,7 @@ namespace DesktopAgent
             headerPanel.BackColor = Color.FromArgb(17, 21, 27);
             headerPanel.Controls.Add(sessionLabel);
             headerPanel.Controls.Add(sessionArrowLabel);
-            headerPanel.Controls.Add(addButton);
+            headerPanel.Controls.Add(settingsButton);
             headerPanel.Dock = DockStyle.Top;
             headerPanel.Location = new Point(0, 0);
             headerPanel.Name = "headerPanel";
@@ -84,7 +110,7 @@ namespace DesktopAgent
             sessionLabel.ForeColor = Color.FromArgb(229, 233, 240);
             sessionLabel.Location = new Point(14, 13);
             sessionLabel.Name = "sessionLabel";
-            sessionLabel.Size = new Size(72, 19);
+            sessionLabel.Size = new Size(108, 19);
             sessionLabel.TabIndex = 0;
             sessionLabel.Text = "Desktop Agent";
             // 
@@ -99,21 +125,23 @@ namespace DesktopAgent
             sessionArrowLabel.TabIndex = 1;
             sessionArrowLabel.Text = "v";
             // 
-            // addButton
+            // settingsButton
             // 
-            addButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            addButton.BackColor = Color.Transparent;
-            addButton.Cursor = Cursors.Hand;
-            addButton.FlatAppearance.BorderSize = 0;
-            addButton.FlatStyle = FlatStyle.Flat;
-            addButton.Font = new Font("Segoe UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 162);
-            addButton.ForeColor = Color.FromArgb(204, 211, 221);
-            addButton.Location = new Point(646, 8);
-            addButton.Name = "addButton";
-            addButton.Size = new Size(32, 30);
-            addButton.TabIndex = 2;
-            addButton.Text = "+";
-            addButton.UseVisualStyleBackColor = false;
+            settingsButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            settingsButton.BackColor = Color.Transparent;
+            settingsButton.Cursor = Cursors.Hand;
+            settingsButton.FlatAppearance.BorderSize = 0;
+            settingsButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(30, 36, 47);
+            settingsButton.FlatStyle = FlatStyle.Flat;
+            settingsButton.Font = new Font("Segoe UI", 13F, FontStyle.Regular, GraphicsUnit.Point, 162);
+            settingsButton.ForeColor = Color.FromArgb(204, 211, 221);
+            settingsButton.Location = new Point(646, 6);
+            settingsButton.Name = "settingsButton";
+            settingsButton.Size = new Size(34, 34);
+            settingsButton.TabIndex = 2;
+            settingsButton.Text = "⚙";
+            settingsButton.UseVisualStyleBackColor = false;
+            settingsButton.Click += settingsButton_Click;
             // 
             // composerPanel
             // 
@@ -154,10 +182,6 @@ namespace DesktopAgent
             // composerFooterPanel
             // 
             composerFooterPanel.Controls.Add(askBeforeEditsCheckBox);
-            composerFooterPanel.Controls.Add(contextFileLabel);
-            composerFooterPanel.Controls.Add(usageLabel);
-            composerFooterPanel.Controls.Add(attachButton);
-            composerFooterPanel.Controls.Add(slashButton);
             composerFooterPanel.Controls.Add(sendButton);
             composerFooterPanel.Dock = DockStyle.Bottom;
             composerFooterPanel.Location = new Point(10, 37);
@@ -179,55 +203,6 @@ namespace DesktopAgent
             askBeforeEditsCheckBox.Text = "Ask before edits";
             askBeforeEditsCheckBox.UseVisualStyleBackColor = true;
             // 
-            // contextFileLabel
-            // 
-            contextFileLabel.AutoSize = true;
-            contextFileLabel.ForeColor = Color.FromArgb(120, 132, 148);
-            contextFileLabel.Location = new Point(118, 5);
-            contextFileLabel.Name = "contextFileLabel";
-            contextFileLabel.Size = new Size(119, 15);
-            contextFileLabel.TabIndex = 1;
-            contextFileLabel.Text = "AccountController.cs";
-            // 
-            // usageLabel
-            // 
-            usageLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            usageLabel.AutoSize = true;
-            usageLabel.ForeColor = Color.FromArgb(157, 167, 180);
-            usageLabel.Location = new Point(509, 5);
-            usageLabel.Name = "usageLabel";
-            usageLabel.Size = new Size(57, 15);
-            usageLabel.TabIndex = 2;
-            usageLabel.Text = "79% used";
-            // 
-            // attachButton
-            // 
-            attachButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            attachButton.Cursor = Cursors.Hand;
-            attachButton.FlatAppearance.BorderSize = 0;
-            attachButton.FlatStyle = FlatStyle.Flat;
-            attachButton.ForeColor = Color.FromArgb(205, 212, 223);
-            attachButton.Location = new Point(568, 0);
-            attachButton.Name = "attachButton";
-            attachButton.Size = new Size(24, 24);
-            attachButton.TabIndex = 3;
-            attachButton.Text = "o";
-            attachButton.UseVisualStyleBackColor = true;
-            // 
-            // slashButton
-            // 
-            slashButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            slashButton.Cursor = Cursors.Hand;
-            slashButton.FlatAppearance.BorderSize = 0;
-            slashButton.FlatStyle = FlatStyle.Flat;
-            slashButton.ForeColor = Color.FromArgb(205, 212, 223);
-            slashButton.Location = new Point(593, 0);
-            slashButton.Name = "slashButton";
-            slashButton.Size = new Size(24, 24);
-            slashButton.TabIndex = 4;
-            slashButton.Text = "/";
-            slashButton.UseVisualStyleBackColor = true;
-            // 
             // sendButton
             // 
             sendButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -240,7 +215,7 @@ namespace DesktopAgent
             sendButton.Name = "sendButton";
             sendButton.Size = new Size(24, 24);
             sendButton.TabIndex = 5;
-            sendButton.Text = "[]";
+            sendButton.Text = ">";
             sendButton.UseVisualStyleBackColor = false;
             sendButton.Click += sendButton_Click;
             // 
@@ -259,12 +234,210 @@ namespace DesktopAgent
             rtbAgent.TabIndex = 3;
             rtbAgent.Text = "";
             // 
+            // settingsOverlayPanel
+            // 
+            settingsOverlayPanel.BackColor = Color.FromArgb(180, 0, 0, 0);
+            settingsOverlayPanel.Controls.Add(settingsInnerPanel);
+            settingsOverlayPanel.Dock = DockStyle.Fill;
+            settingsOverlayPanel.Location = new Point(0, 46);
+            settingsOverlayPanel.Name = "settingsOverlayPanel";
+            settingsOverlayPanel.Size = new Size(690, 757);
+            settingsOverlayPanel.TabIndex = 10;
+            settingsOverlayPanel.Visible = false;
+            settingsOverlayPanel.Click += closeSettingsButton_Click;
+            // 
+            // settingsInnerPanel
+            // 
+            settingsInnerPanel.Anchor = AnchorStyles.None;
+            settingsInnerPanel.BackColor = Color.FromArgb(22, 27, 34);
+            settingsInnerPanel.Controls.Add(settingsTitleLabel);
+            settingsInnerPanel.Controls.Add(ollamaUrlLabel);
+            settingsInnerPanel.Controls.Add(ollamaUrlTextBox);
+            settingsInnerPanel.Controls.Add(fetchModelsButton);
+            settingsInnerPanel.Controls.Add(modelLabel);
+            settingsInnerPanel.Controls.Add(modelComboBox);
+            settingsInnerPanel.Controls.Add(workspaceLabel);
+            settingsInnerPanel.Controls.Add(workspaceTextBox);
+            settingsInnerPanel.Controls.Add(browseWorkspaceButton);
+            settingsInnerPanel.Controls.Add(systemPromptLabel);
+            settingsInnerPanel.Controls.Add(systemPromptTextBox);
+            settingsInnerPanel.Controls.Add(saveSettingsButton);
+            settingsInnerPanel.Controls.Add(closeSettingsButton);
+            settingsInnerPanel.Location = new Point(245, 328);
+            settingsInnerPanel.Name = "settingsInnerPanel";
+            settingsInnerPanel.Padding = new Padding(24);
+            settingsInnerPanel.Size = new Size(440, 430);
+            settingsInnerPanel.TabIndex = 0;
+            // 
+            // settingsTitleLabel
+            // 
+            settingsTitleLabel.Font = new Font("Segoe UI", 13F, FontStyle.Bold);
+            settingsTitleLabel.ForeColor = Color.FromArgb(229, 233, 240);
+            settingsTitleLabel.Location = new Point(24, 20);
+            settingsTitleLabel.Name = "settingsTitleLabel";
+            settingsTitleLabel.Size = new Size(200, 28);
+            settingsTitleLabel.TabIndex = 0;
+            settingsTitleLabel.Text = "Settings";
+            // 
+            // ollamaUrlLabel
+            // 
+            ollamaUrlLabel.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            ollamaUrlLabel.ForeColor = Color.FromArgb(171, 181, 195);
+            ollamaUrlLabel.Location = new Point(24, 60);
+            ollamaUrlLabel.Name = "ollamaUrlLabel";
+            ollamaUrlLabel.Size = new Size(120, 18);
+            ollamaUrlLabel.TabIndex = 1;
+            ollamaUrlLabel.Text = "Ollama URL";
+            // 
+            // ollamaUrlTextBox
+            // 
+            ollamaUrlTextBox.BackColor = Color.FromArgb(13, 17, 23);
+            ollamaUrlTextBox.BorderStyle = BorderStyle.FixedSingle;
+            ollamaUrlTextBox.Font = new Font("Segoe UI", 10F);
+            ollamaUrlTextBox.ForeColor = Color.FromArgb(214, 220, 229);
+            ollamaUrlTextBox.Location = new Point(24, 80);
+            ollamaUrlTextBox.Name = "ollamaUrlTextBox";
+            ollamaUrlTextBox.Size = new Size(300, 25);
+            ollamaUrlTextBox.TabIndex = 2;
+            // 
+            // fetchModelsButton
+            // 
+            fetchModelsButton.BackColor = Color.FromArgb(36, 42, 54);
+            fetchModelsButton.Cursor = Cursors.Hand;
+            fetchModelsButton.FlatAppearance.BorderColor = Color.FromArgb(60, 68, 82);
+            fetchModelsButton.FlatStyle = FlatStyle.Flat;
+            fetchModelsButton.Font = new Font("Segoe UI", 9F);
+            fetchModelsButton.ForeColor = Color.FromArgb(204, 211, 221);
+            fetchModelsButton.Location = new Point(332, 79);
+            fetchModelsButton.Name = "fetchModelsButton";
+            fetchModelsButton.Size = new Size(82, 27);
+            fetchModelsButton.TabIndex = 3;
+            fetchModelsButton.Text = "List";
+            fetchModelsButton.UseVisualStyleBackColor = false;
+            fetchModelsButton.Click += fetchModelsButton_Click;
+            // 
+            // modelLabel
+            // 
+            modelLabel.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            modelLabel.ForeColor = Color.FromArgb(171, 181, 195);
+            modelLabel.Location = new Point(24, 118);
+            modelLabel.Name = "modelLabel";
+            modelLabel.Size = new Size(120, 18);
+            modelLabel.TabIndex = 4;
+            modelLabel.Text = "Model";
+            // 
+            // modelComboBox
+            // 
+            modelComboBox.BackColor = Color.FromArgb(13, 17, 23);
+            modelComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            modelComboBox.FlatStyle = FlatStyle.Flat;
+            modelComboBox.Font = new Font("Segoe UI", 10F);
+            modelComboBox.ForeColor = Color.FromArgb(214, 220, 229);
+            modelComboBox.Location = new Point(24, 138);
+            modelComboBox.Name = "modelComboBox";
+            modelComboBox.Size = new Size(390, 25);
+            modelComboBox.TabIndex = 5;
+            // 
+            // workspaceLabel
+            // 
+            workspaceLabel.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            workspaceLabel.ForeColor = Color.FromArgb(171, 181, 195);
+            workspaceLabel.Location = new Point(24, 178);
+            workspaceLabel.Name = "workspaceLabel";
+            workspaceLabel.Size = new Size(120, 18);
+            workspaceLabel.TabIndex = 6;
+            workspaceLabel.Text = "Workspace";
+            // 
+            // workspaceTextBox
+            // 
+            workspaceTextBox.BackColor = Color.FromArgb(13, 17, 23);
+            workspaceTextBox.BorderStyle = BorderStyle.FixedSingle;
+            workspaceTextBox.Font = new Font("Segoe UI", 10F);
+            workspaceTextBox.ForeColor = Color.FromArgb(214, 220, 229);
+            workspaceTextBox.Location = new Point(24, 198);
+            workspaceTextBox.Name = "workspaceTextBox";
+            workspaceTextBox.ReadOnly = true;
+            workspaceTextBox.Size = new Size(300, 25);
+            workspaceTextBox.TabIndex = 7;
+            // 
+            // browseWorkspaceButton
+            // 
+            browseWorkspaceButton.BackColor = Color.FromArgb(36, 42, 54);
+            browseWorkspaceButton.Cursor = Cursors.Hand;
+            browseWorkspaceButton.FlatAppearance.BorderColor = Color.FromArgb(60, 68, 82);
+            browseWorkspaceButton.FlatStyle = FlatStyle.Flat;
+            browseWorkspaceButton.Font = new Font("Segoe UI", 9F);
+            browseWorkspaceButton.ForeColor = Color.FromArgb(204, 211, 221);
+            browseWorkspaceButton.Location = new Point(332, 197);
+            browseWorkspaceButton.Name = "browseWorkspaceButton";
+            browseWorkspaceButton.Size = new Size(82, 27);
+            browseWorkspaceButton.TabIndex = 8;
+            browseWorkspaceButton.Text = "Lookup";
+            browseWorkspaceButton.UseVisualStyleBackColor = false;
+            browseWorkspaceButton.Click += browseWorkspaceButton_Click;
+            // 
+            // systemPromptLabel
+            // 
+            systemPromptLabel.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            systemPromptLabel.ForeColor = Color.FromArgb(171, 181, 195);
+            systemPromptLabel.Location = new Point(24, 238);
+            systemPromptLabel.Name = "systemPromptLabel";
+            systemPromptLabel.Size = new Size(200, 18);
+            systemPromptLabel.TabIndex = 11;
+            systemPromptLabel.Text = "System Prompt";
+            // 
+            // systemPromptTextBox
+            // 
+            systemPromptTextBox.BackColor = Color.FromArgb(13, 17, 23);
+            systemPromptTextBox.BorderStyle = BorderStyle.FixedSingle;
+            systemPromptTextBox.Font = new Font("Segoe UI", 9F);
+            systemPromptTextBox.ForeColor = Color.FromArgb(214, 220, 229);
+            systemPromptTextBox.Location = new Point(24, 258);
+            systemPromptTextBox.Multiline = true;
+            systemPromptTextBox.Name = "systemPromptTextBox";
+            systemPromptTextBox.ScrollBars = ScrollBars.Vertical;
+            systemPromptTextBox.Size = new Size(390, 100);
+            systemPromptTextBox.TabIndex = 12;
+            // 
+            // saveSettingsButton
+            // 
+            saveSettingsButton.BackColor = Color.FromArgb(210, 113, 69);
+            saveSettingsButton.Cursor = Cursors.Hand;
+            saveSettingsButton.FlatAppearance.BorderSize = 0;
+            saveSettingsButton.FlatStyle = FlatStyle.Flat;
+            saveSettingsButton.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            saveSettingsButton.ForeColor = Color.White;
+            saveSettingsButton.Location = new Point(24, 374);
+            saveSettingsButton.Name = "saveSettingsButton";
+            saveSettingsButton.Size = new Size(190, 36);
+            saveSettingsButton.TabIndex = 9;
+            saveSettingsButton.Text = "Save";
+            saveSettingsButton.UseVisualStyleBackColor = false;
+            saveSettingsButton.Click += saveSettingsButton_Click;
+            // 
+            // closeSettingsButton
+            // 
+            closeSettingsButton.BackColor = Color.FromArgb(36, 42, 54);
+            closeSettingsButton.Cursor = Cursors.Hand;
+            closeSettingsButton.FlatAppearance.BorderColor = Color.FromArgb(60, 68, 82);
+            closeSettingsButton.FlatStyle = FlatStyle.Flat;
+            closeSettingsButton.Font = new Font("Segoe UI", 10F);
+            closeSettingsButton.ForeColor = Color.FromArgb(204, 211, 221);
+            closeSettingsButton.Location = new Point(224, 374);
+            closeSettingsButton.Name = "closeSettingsButton";
+            closeSettingsButton.Size = new Size(190, 36);
+            closeSettingsButton.TabIndex = 10;
+            closeSettingsButton.Text = "Close";
+            closeSettingsButton.UseVisualStyleBackColor = false;
+            closeSettingsButton.Click += closeSettingsButton_Click;
+            // 
             // AgentForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(12, 15, 20);
             ClientSize = new Size(690, 894);
+            Controls.Add(settingsOverlayPanel);
             Controls.Add(rtbAgent);
             Controls.Add(composerPanel);
             Controls.Add(headerPanel);
@@ -280,6 +453,9 @@ namespace DesktopAgent
             composerCard.PerformLayout();
             composerFooterPanel.ResumeLayout(false);
             composerFooterPanel.PerformLayout();
+            settingsOverlayPanel.ResumeLayout(false);
+            settingsInnerPanel.ResumeLayout(false);
+            settingsInnerPanel.PerformLayout();
             ResumeLayout(false);
         }
 

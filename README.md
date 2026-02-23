@@ -13,6 +13,7 @@ Ollama destekli, Windows masaüstü AI ajan uygulaması. Doğal dilde verilen g�
 - **Gerçek Zamanlı Çıktı** — Renk kodlu çıktı ile düşünme, araç çağrısı, sonuç ve yanıt adımları
 - **Yerel LLM** — Ollama ile tamamen yerel çalışır, veri dışarı çıkmaz
 - **İptal Desteği** — Çalışan görevler kullanıcı tarafından iptal edilebilir
+- **Ayarlar Paneli** — Uygulama içinden Ollama URL, model seçimi, workspace dizini ve system prompt yapılandırılabilir
 
 ## Gereksinimler
 
@@ -42,6 +43,19 @@ dotnet run --project DesktopAgent.csproj
 2. Metin kutusuna görevinizi yazın (ör: *"Bir ASP.NET Web API projesi oluştur"*)
 3. Enter'a basın veya **Gönder** butonuna tıklayın
 4. Ajan düşünecek, gerekli araçları çağıracak ve sonucu gösterecektir
+
+### Ayarlar Paneli
+
+Sağ üst köşedeki **⚙** butonuna tıklayarak ayarlar panelini açabilirsiniz:
+
+| Alan | Açıklama |
+|------|----------|
+| **Ollama URL** | Ollama sunucu adresi (ör: `http://localhost:11434`). "Listele" butonu ile bağlantıyı test edip modelleri çekebilirsiniz. |
+| **Model** | Ollama'dan çekilen model listesinden seçim yapılır. Seçilen model tüm sonraki görevlerde kullanılır. |
+| **Workspace** | Ajanın çalışacağı varsayılan dizin. "Gözat..." ile klasör seçilir. |
+| **System Prompt** | Ajana verilen temel talimat metni. Ajanın davranışını, bildiği dilleri ve araç kullanım formatını belirler. |
+
+Ayarlar **Kaydet** ile `%APPDATA%/OllamaWin/settings.json` dosyasına kalıcı olarak yazılır ve anında uygulanır.
 
 ### Çıktı Renk Kodları
 
@@ -74,9 +88,13 @@ Ayarlar `%APPDATA%/OllamaWin/settings.json` dosyasında saklanır:
 ```json
 {
   "OllamaBaseUrl": "http://localhost:11434",
-  "WorkspacePath": "D:\\AI\\llmtest"
+  "WorkspacePath": "D:\\AI\\llmtest",
+  "SelectedModel": "qwen3-coder-32k",
+  "SystemPrompt": "Sen guclu bir yazilim gelistirme ajanisin..."
 }
 ```
+
+Tüm ayarlar uygulama içindeki ayarlar panelinden de değiştirilebilir.
 
 ## Mimari
 
@@ -98,16 +116,18 @@ Kullanıcı → AgentForm → AgentService → OllamaClient → Ollama LLM
 ```
 DesktopAgent/
 ├── Program.cs                 # Giriş noktası, loglama
-├── AgentForm.cs               # UI ve kullanıcı etkileşimi
+├── AgentForm.cs               # UI, kullanıcı etkileşimi ve ayarlar paneli
+├── AgentForm.Designer.cs      # WinForms tasarımcı kodu
 ├── Services/
-│   ├── AgentService.cs        # Ajansal döngü
-│   ├── OllamaClient.cs       # Ollama API istemcisi
+│   ├── AgentService.cs        # Ajansal döngü (system prompt dışarıdan ayarlanabilir)
+│   ├── ILLMClient.cs          # LLM istemci arayüzü
+│   ├── OllamaClient.cs        # Ollama API istemcisi
 │   └── Tools/
 │       ├── BasicTools.cs      # Araç implementasyonları
 │       ├── ListToolsTool.cs   # Araç listeleme
 │       └── ToolRegistry.cs    # Araç kaydı
 ├── Utils/
-│   ├── AppSettingsStore.cs    # Ayar yönetimi
+│   ├── AppSettingsStore.cs    # Ayar yönetimi (URL, model, workspace, system prompt)
 │   ├── ProcessRunner.cs       # Komut çalıştırma
 │   └── WorkspaceContext.cs    # Workspace yönetimi
 └── DesktopAgent.csproj        # .NET 9.0 proje dosyası
