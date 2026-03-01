@@ -22,6 +22,7 @@ namespace DesktopAgent.Services
         private readonly OllamaClient _ollama;
         private readonly ToolRegistry _tools;
         private string _baseSystemPrompt;
+        private string _recentContext = string.Empty;
 
         public AgentService(OllamaClient ollama, ToolRegistry tools, string? baseSystemPrompt = null)
         {
@@ -38,15 +39,34 @@ namespace DesktopAgent.Services
             _baseSystemPrompt = prompt;
         }
 
-        public async Task RunAsync(string model, string task, Action<AgentStep> onStep, CancellationToken ct = default)
+        /// <summary>
+        /// Injects a brief summary of recent runs into the system prompt so the agent
+        /// has cross-session context (e.g. knowing which project was created last time).
+        /// </summary>
+        public void SetRecentContext(string context)
         {
-            var messages = new List<ChatMessage>
-            {
-                new("system", BuildSystemPrompt()),
-                new("user", task)
-            };
+            _recentContext = context;
+        }
 
-            var iteration = 0;
+        public async Task RunAsync(
+            string model,
+            string task,
+            Action<AgentStep> onStep,
+            CancellationToken ct = default,
+            List<ChatMessage>? resumeMessages = null,
+            Action<List<ChatMessage>>? onCheckpoint = null)
+        {
+            // Clone resume messages to avoid mutating the caller's list, or start fresh.
+            var messages = resumeMessages != null
+                ? new List<ChatMessage>(resumeMessages)
+                : new List<ChatMessage>
+                  {
+                      new("system", BuildSystemPrompt()),
+                      new("user", task)
+                  };
+
+            // Start iteration count from where we left off so step labels are correct.
+            var iteration = messages.Count(m => m.role == "assistant");
             while (!ct.IsCancellationRequested)
             {
                 iteration++;
@@ -89,25 +109,26 @@ namespace DesktopAgent.Services
                         var prefix  = result.Success ? "OK" : "ERR";
                         var content = result.Success
                             ? NormalizeText(result.Output, "Tool executed but output was empty.")
-                            : NormalizeText(result.Error, "Unknown tool error.");
+                            : NormalizeText(MergeOutputAndError(result), "Unknown tool error.");
 
                         onStep(new AgentStep
                         {
                             Type     = "tool_result",
                             ToolName = toolName,
                             Content  = $"{prefix} {content}",
-                            Detail   = result.Success ? result.Output : result.Error
+                            Detail   = result.Success ? result.Output : MergeOutputAndError(result)
                         });
 
                         var feedback = result.Success
                             ? $"OK: {NormalizeText(result.Output, "Tool executed but output was empty.")}"
-                            : $"ERR: {NormalizeText(result.Error, "Unknown tool error.")}\nRULE: Resolve this error before continuing. Available tools: {toolList}";
+                            : $"ERR: {NormalizeText(MergeOutputAndError(result), "Unknown tool error.")}\nRULE: Resolve this error before continuing. Available tools: {toolList}";
 
                         feedbackParts.Add($"Tool result for '{toolName}':\n{feedback}");
                     }
 
                     messages.Add(new ChatMessage("assistant", reply));
                     messages.Add(new ChatMessage("user", string.Join("\n\n", feedbackParts)));
+                    onCheckpoint?.Invoke(messages);
                     continue;
                 }
 
@@ -136,6 +157,7 @@ namespace DesktopAgent.Services
                                      $"If you are done, provide the final response and include [DONE].";
 
                     messages.Add(new ChatMessage("user", correction));
+                    onCheckpoint?.Invoke(messages);
                     onStep(new AgentStep
                     {
                         Type = "thinking",
@@ -156,9 +178,13 @@ namespace DesktopAgent.Services
         private string BuildSystemPrompt()
         {
             var toolList = GetToolListCsv();
+            var recentSection = string.IsNullOrWhiteSpace(_recentContext)
+                ? string.Empty
+                : $"\n\nRecent completed tasks (cross-session memory):\n{_recentContext}\n";
+
             return _baseSystemPrompt + $@"
 
-Default workspace directory: {WorkspaceContext.CurrentPath}
+Default workspace directory: {WorkspaceContext.CurrentPath}{recentSection}
 Available tools: {toolList}
 
 TOOL CALL FORMAT — output exactly one JSON object per response:
@@ -172,6 +198,7 @@ Tool signatures (? = optional):
   run_terminal(command, cwd?)
   search_in_files(query, include?)
   create_directory(path)
+  open_browser(url)
   list_tools()
 
 Rules:
@@ -184,11 +211,19 @@ Rules:
 - Use existing files and directories whenever possible instead of creating new ones.
 - If the user does not specify a path/directory, do not ask - use the default workspace.
 - Resolve relative paths against the workspace.
+- NEVER ask the user ""which project?"" or ""what language?"" -- always call list_files on the workspace to discover existing projects yourself.
 - Do not ask unnecessary confirmation questions just because the path is ambiguous.
 - Do not call tools that are not in the list. Calling an unknown tool will result in an error.
 - Follow valid JSON escape rules in tool JSON outputs.
 - For run_terminal, always set cwd to an absolute path that already exists. If unsure, omit cwd to use the default workspace.
 - If list_files returns empty directory, that directory exists but has no files - do not treat it as an error.
+- NEVER use dotnet run directly — it will block the terminal for 180 seconds and always time out.
+- To start a web API/app in the background, use run_terminal with: powershell -Command ""Start-Process dotnet -ArgumentList 'run --project <absolute-project-path>' -WorkingDirectory '<project-dir>' -WindowStyle Hidden"" — this fully detaches the process so run_terminal returns immediately.
+- After starting a background process, wait ~3 seconds with run_terminal: timeout /t 3 /nobreak >nul, then call open_browser with the correct URL (check Properties/launchSettings.json for the port first if unsure).
+- Only call open_browser AFTER dotnet build succeeds with 0 errors. NEVER open the browser if the build failed.
+- Use dotnet build only to verify compilation without running.
+- ASP.NET Core project structure: when adding Controllers/Models to a project created with dotnet new webapi, create files DIRECTLY inside the project folder (e.g. D:\workspace\MyApi\Controllers\MyController.cs). NEVER create a subfolder named after the project inside itself (e.g. D:\workspace\MyApi\MyApi\Controllers\ is WRONG — it causes duplicate Program.cs and CS8802 errors).
+- NEVER add a ProjectReference that points to the same project's own .csproj file — that creates a circular dependency and breaks the build.
 - Keep answers short and concise, except for JSON outputs.";
         }
 
@@ -204,6 +239,20 @@ Rules:
         private static string NormalizeText(string? value, string fallback)
         {
             return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        }
+
+        /// <summary>
+        /// Combines stdout and stderr for failed tool results so the model sees
+        /// the full output (e.g. dotnet build errors that go to stdout, not stderr).
+        /// </summary>
+        private static string MergeOutputAndError(ToolResult result)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(result.Output))
+                parts.Add(result.Output.Trim());
+            if (!string.IsNullOrWhiteSpace(result.Error))
+                parts.Add($"[stderr]\n{result.Error.Trim()}");
+            return parts.Count > 0 ? string.Join("\n", parts) : string.Empty;
         }
 
         private bool TryParseAllToolCalls(string text, out List<(string Tool, JsonElement Args)> calls)

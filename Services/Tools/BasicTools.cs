@@ -124,6 +124,10 @@ public class RunTerminalTool : ITool
             cwd = WorkspaceContext.CurrentPath;
         }
 
+        // Auto-convert blocking "dotnet run" → kill existing instance + background start.
+        if (IsBlockingDotnetRun(command))
+            return await AutoStartInBackgroundAsync(command, cwd, ct);
+
         var runResult = await ProcessRunner.RunAsync(command, cwd, TimeSpan.FromSeconds(180), ct);
 
         var output = runResult.StdOut;
@@ -156,6 +160,97 @@ public class RunTerminalTool : ITool
         }
 
         return new ToolResult(runResult.Success, output, error);
+    }
+
+    /// <summary>
+    /// Returns true if the command is a bare "dotnet run" (blocking) without a background wrapper.
+    /// Allows: powershell Start-Process, cmd start /B, etc.
+    /// Blocks: dotnet run / dotnet run --project ... / dotnet watch run
+    /// </summary>
+    private static bool IsBlockingDotnetRun(string command)
+    {
+        var lower = command.Trim().ToLowerInvariant();
+
+        // Allowed: already wrapped in a background launcher
+        if (lower.Contains("start-process") ||
+            lower.Contains("start /b")      ||
+            lower.Contains("start /B"))
+            return false;
+
+        // Block: dotnet run / dotnet watch run (with or without flags)
+        return System.Text.RegularExpressions.Regex.IsMatch(
+            lower,
+            @"\bdotnet\s+(run|watch\s+run)\b");
+    }
+
+    /// <summary>
+    /// Intercepts "dotnet run [--project path]", kills any existing running instance of
+    /// the same project exe, then starts the process in the background via PowerShell
+    /// Start-Process (which does NOT inherit pipe handles and returns immediately).
+    /// </summary>
+    private static async Task<ToolResult> AutoStartInBackgroundAsync(
+        string command, string cwd, CancellationToken ct)
+    {
+        // Resolve project directory and exe name.
+        var projectDir  = ResolveProjectDir(command, cwd);
+        var csprojPath  = FindCsproj(projectDir);
+        var exeName     = csprojPath != null
+            ? Path.GetFileNameWithoutExtension(csprojPath)
+            : Path.GetFileName(projectDir);
+
+        var steps = new System.Text.StringBuilder();
+
+        // 1. Kill existing instance (best-effort, ignore errors).
+        var killCmd  = $"taskkill /F /IM \"{exeName}.exe\" 2>nul & exit /b 0";
+        var killResult = await ProcessRunner.RunAsync(killCmd, cwd, TimeSpan.FromSeconds(10), ct);
+        if (!string.IsNullOrWhiteSpace(killResult.StdOut) &&
+            killResult.StdOut.Contains("SUCCESS", StringComparison.OrdinalIgnoreCase))
+        {
+            steps.AppendLine($"Killed existing instance: {exeName}.exe");
+        }
+
+        // 2. Build the Start-Process command.
+        var projectArg  = csprojPath != null ? $"run --project \\\"{csprojPath}\\\"" : "run";
+        var psCommand   = $"Start-Process dotnet " +
+                          $"-ArgumentList '{projectArg}' " +
+                          $"-WorkingDirectory '{projectDir}' " +
+                          $"-WindowStyle Hidden";
+        var bgCmd = $"powershell -Command \"{psCommand}\"";
+
+        // 3. Launch background process.
+        var bgResult = await ProcessRunner.RunAsync(bgCmd, cwd, TimeSpan.FromSeconds(15), ct);
+        if (!bgResult.Success)
+        {
+            return new ToolResult(false, steps.ToString(),
+                $"Background start failed: {bgResult.StdErr}");
+        }
+
+        steps.AppendLine($"Started {exeName} in background.");
+        steps.AppendLine("Wait 3 seconds, then open the browser with the URL from Properties/launchSettings.json.");
+        return new ToolResult(true, steps.ToString().Trim());
+    }
+
+    /// <summary>Extracts --project path from the command or falls back to cwd.</summary>
+    private static string ResolveProjectDir(string command, string cwd)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(
+            command, @"--project\s+""?([^""]+?)""?\s*(?:--|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (m.Success)
+        {
+            var path = m.Groups[1].Value.Trim();
+            if (Path.IsPathRooted(path))
+                return File.Exists(path) ? Path.GetDirectoryName(path)! : path;
+            var combined = Path.GetFullPath(Path.Combine(cwd, path));
+            return File.Exists(combined) ? Path.GetDirectoryName(combined)! : combined;
+        }
+        return cwd;
+    }
+
+    /// <summary>Finds the first .csproj in the given directory (non-recursive).</summary>
+    private static string? FindCsproj(string dir)
+    {
+        if (!Directory.Exists(dir)) return null;
+        return Directory.EnumerateFiles(dir, "*.csproj").FirstOrDefault();
     }
 }
 
@@ -245,6 +340,34 @@ public class InsertCodeTool : ITool
     public Task<ToolResult> RunAsync(JsonElement args, CancellationToken ct)
     {
         return Task.FromResult(new ToolResult(true, "InsertCode is not supported (VS Code only)."));
+    }
+}
+
+public class OpenBrowserTool : ITool
+{
+    public string Name => "open_browser";
+    public Task<ToolResult> RunAsync(JsonElement args, CancellationToken ct)
+    {
+        if (!args.TryGetProperty("url", out var urlProp))
+            return Task.FromResult(new ToolResult(false, string.Empty, "Missing required argument: url"));
+
+        var url = urlProp.GetString() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(url))
+            return Task.FromResult(new ToolResult(false, string.Empty, "url cannot be empty"));
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName        = url,
+                UseShellExecute = true
+            });
+            return Task.FromResult(new ToolResult(true, $"Opened browser: {url}"));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new ToolResult(false, string.Empty, ex.Message));
+        }
     }
 }
 

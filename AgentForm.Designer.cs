@@ -14,11 +14,10 @@ namespace DesktopAgent
         private Label sessionLabel = null!;
         private Label sessionArrowLabel = null!;
         private Button settingsButton = null!;
+        private Button clearContextButton = null!;
         private Panel composerPanel = null!;
         private Panel composerCard = null!;
         private TextBox messageTextBox = null!;
-        private Panel composerFooterPanel = null!;
-        private CheckBox askBeforeEditsCheckBox = null!;
         private Label timerLabel = null!;
         private Button sendButton = null!;
 
@@ -66,14 +65,13 @@ namespace DesktopAgent
             components = new System.ComponentModel.Container();
             headerPanel = new Panel();
             sessionLabel = new Label();
+            timerLabel = new Label();
             sessionArrowLabel = new Label();
             settingsButton = new Button();
+            clearContextButton = new Button();
             composerPanel = new Panel();
             composerCard = new Panel();
             messageTextBox = new TextBox();
-            composerFooterPanel = new Panel();
-            askBeforeEditsCheckBox = new CheckBox();
-            timerLabel = new Label();
             sendButton = new Button();
             rtbAgent = new RichTextBox();
             settingsOverlayPanel = new Panel();
@@ -96,7 +94,6 @@ namespace DesktopAgent
             headerPanel.SuspendLayout();
             composerPanel.SuspendLayout();
             composerCard.SuspendLayout();
-            composerFooterPanel.SuspendLayout();
             settingsOverlayPanel.SuspendLayout();
             settingsInnerPanel.SuspendLayout();
             SuspendLayout();
@@ -105,7 +102,9 @@ namespace DesktopAgent
             // 
             headerPanel.BackColor = Color.FromArgb(17, 21, 27);
             headerPanel.Controls.Add(sessionLabel);
+            headerPanel.Controls.Add(timerLabel);
             headerPanel.Controls.Add(sessionArrowLabel);
+            headerPanel.Controls.Add(clearContextButton);
             headerPanel.Controls.Add(settingsButton);
             headerPanel.Dock = DockStyle.Top;
             headerPanel.Location = new Point(0, 0);
@@ -124,6 +123,18 @@ namespace DesktopAgent
             sessionLabel.TabIndex = 0;
             sessionLabel.Text = "Desktop Agent";
             // 
+            // timerLabel
+            // 
+            timerLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            timerLabel.Font = new Font("Segoe UI", 8.5F);
+            timerLabel.ForeColor = Color.FromArgb(100, 160, 220);
+            timerLabel.Location = new Point(138, 14);
+            timerLabel.Name = "timerLabel";
+            timerLabel.Size = new Size(65, 22);
+            timerLabel.TabIndex = 6;
+            timerLabel.TextAlign = ContentAlignment.MiddleRight;
+            timerLabel.Visible = false;
+            // 
             // sessionArrowLabel
             // 
             sessionArrowLabel.AutoSize = true;
@@ -134,9 +145,27 @@ namespace DesktopAgent
             sessionArrowLabel.Size = new Size(16, 19);
             sessionArrowLabel.TabIndex = 1;
             sessionArrowLabel.Text = "v";
-            // 
+            //
+            // clearContextButton
+            //
+            clearContextButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            clearContextButton.BackColor = Color.Transparent;
+            clearContextButton.Cursor = Cursors.Hand;
+            clearContextButton.FlatAppearance.BorderSize = 0;
+            clearContextButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(30, 36, 47);
+            clearContextButton.FlatStyle = FlatStyle.Flat;
+            clearContextButton.Font = new Font("Segoe UI", 13F, FontStyle.Regular, GraphicsUnit.Point, 162);
+            clearContextButton.ForeColor = Color.FromArgb(148, 163, 184);
+            clearContextButton.Location = new Point(608, 6);
+            clearContextButton.Name = "clearContextButton";
+            clearContextButton.Size = new Size(34, 34);
+            clearContextButton.TabIndex = 3;
+            clearContextButton.Text = "↺";
+            clearContextButton.UseVisualStyleBackColor = false;
+            clearContextButton.Click += clearContextButton_Click;
+            //
             // settingsButton
-            // 
+            //
             settingsButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             settingsButton.BackColor = Color.Transparent;
             settingsButton.Cursor = Cursors.Hand;
@@ -168,7 +197,7 @@ namespace DesktopAgent
             // 
             composerCard.BackColor = Color.FromArgb(24, 29, 37);
             composerCard.Controls.Add(messageTextBox);
-            composerCard.Controls.Add(composerFooterPanel);
+            composerCard.Controls.Add(sendButton);
             composerCard.Dock = DockStyle.Fill;
             composerCard.Location = new Point(12, 6);
             composerCard.Name = "composerCard";
@@ -180,66 +209,28 @@ namespace DesktopAgent
             // 
             messageTextBox.BackColor = Color.FromArgb(24, 29, 37);
             messageTextBox.BorderStyle = BorderStyle.None;
-            messageTextBox.Dock = DockStyle.Top;
+            messageTextBox.Dock = DockStyle.Left;
             messageTextBox.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point, 162);
             messageTextBox.ForeColor = Color.FromArgb(214, 220, 229);
             messageTextBox.Location = new Point(10, 9);
+            messageTextBox.Multiline = true;
             messageTextBox.Name = "messageTextBox";
             messageTextBox.PlaceholderText = "Queue another message...";
-            messageTextBox.Size = new Size(646, 18);
+            messageTextBox.Size = new Size(574, 56);
             messageTextBox.TabIndex = 0;
-            messageTextBox.Text = "can you create a project with asp.net core?";
+            messageTextBox.Text = "can you create a project with asp.net core api ?";
             // 
-            // composerFooterPanel
-            // 
-            composerFooterPanel.Controls.Add(askBeforeEditsCheckBox);
-            composerFooterPanel.Controls.Add(timerLabel);
-            composerFooterPanel.Controls.Add(sendButton);
-            composerFooterPanel.Dock = DockStyle.Bottom;
-            composerFooterPanel.Location = new Point(10, 37);
-            composerFooterPanel.Name = "composerFooterPanel";
-            composerFooterPanel.Size = new Size(646, 28);
-            composerFooterPanel.TabIndex = 1;
-            // 
-            // askBeforeEditsCheckBox
-            // 
-            askBeforeEditsCheckBox.AutoSize = true;
-            askBeforeEditsCheckBox.Checked = true;
-            askBeforeEditsCheckBox.CheckState = CheckState.Checked;
-            askBeforeEditsCheckBox.Cursor = Cursors.Hand;
-            askBeforeEditsCheckBox.ForeColor = Color.FromArgb(171, 181, 195);
-            askBeforeEditsCheckBox.Location = new Point(0, 4);
-            askBeforeEditsCheckBox.Name = "askBeforeEditsCheckBox";
-            askBeforeEditsCheckBox.Size = new Size(110, 19);
-            askBeforeEditsCheckBox.TabIndex = 0;
-            askBeforeEditsCheckBox.Text = "Ask before edits";
-            askBeforeEditsCheckBox.UseVisualStyleBackColor = true;
-            //
-            // timerLabel
-            //
-            timerLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            timerLabel.AutoSize = false;
-            timerLabel.Font = new Font("Segoe UI", 8.5F);
-            timerLabel.ForeColor = Color.FromArgb(100, 160, 220);
-            timerLabel.Location = new Point(484, 6);
-            timerLabel.Name = "timerLabel";
-            timerLabel.Size = new Size(130, 16);
-            timerLabel.TabIndex = 6;
-            timerLabel.Text = "";
-            timerLabel.TextAlign = ContentAlignment.MiddleRight;
-            timerLabel.Visible = false;
-            //
             // sendButton
-            //
-            sendButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            // 
             sendButton.BackColor = Color.FromArgb(210, 113, 69);
             sendButton.Cursor = Cursors.Hand;
+            sendButton.Dock = DockStyle.Right;
             sendButton.FlatAppearance.BorderSize = 0;
             sendButton.FlatStyle = FlatStyle.Flat;
             sendButton.ForeColor = Color.White;
-            sendButton.Location = new Point(620, 1);
+            sendButton.Location = new Point(591, 9);
             sendButton.Name = "sendButton";
-            sendButton.Size = new Size(24, 24);
+            sendButton.Size = new Size(65, 56);
             sendButton.TabIndex = 5;
             sendButton.Text = ">";
             sendButton.UseVisualStyleBackColor = false;
@@ -488,8 +479,6 @@ namespace DesktopAgent
             composerPanel.ResumeLayout(false);
             composerCard.ResumeLayout(false);
             composerCard.PerformLayout();
-            composerFooterPanel.ResumeLayout(false);
-            composerFooterPanel.PerformLayout();
             settingsOverlayPanel.ResumeLayout(false);
             settingsInnerPanel.ResumeLayout(false);
             settingsInnerPanel.PerformLayout();

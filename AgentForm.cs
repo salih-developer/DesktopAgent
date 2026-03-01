@@ -25,6 +25,8 @@ namespace DesktopAgent
 
         public AgentForm()
         {
+            AgentDatabase.Initialize();   // create data/agent.db + tables if missing
+
             _settings = AppSettingsStore.Load();
             _settings.WorkspacePath = AppSettingsStore.NormalizeWorkspacePath(_settings.WorkspacePath);
             WorkspaceContext.Set(_settings.WorkspacePath);
@@ -43,6 +45,7 @@ namespace DesktopAgent
                 new GetDiagnosticsTool(),
                 new GetOpenFileInfoTool(),
                 new InsertCodeTool(),
+                new OpenBrowserTool(),
                 new ListToolsTool(() => registry?.GetToolNames() ?? Array.Empty<string>())
             };
             registry = new ToolRegistry(toolList);
@@ -98,6 +101,30 @@ namespace DesktopAgent
             if (settingsInnerPanel == null || settingsOverlayPanel == null) return;
             settingsInnerPanel.Left = (settingsOverlayPanel.ClientSize.Width - settingsInnerPanel.Width) / 2;
             settingsInnerPanel.Top = (settingsOverlayPanel.ClientSize.Height - settingsInnerPanel.Height) / 2;
+        }
+
+        // ── Clear Context ────────────────────────────────────────────────
+
+        private void clearContextButton_Click(object? sender, EventArgs e)
+        {
+            if (_isAgentRunning) return;
+
+            CheckpointStore.Delete();
+            AgentDatabase.SoftDeleteAllRuns();
+            _agent.SetRecentContext(string.Empty);
+
+            // Brief green flash as visual feedback
+            clearContextButton.ForeColor = Color.FromArgb(34, 197, 94);
+            var restoreTimer = new System.Windows.Forms.Timer { Interval = 1200 };
+            restoreTimer.Tick += (_, _) =>
+            {
+                clearContextButton.ForeColor = Color.FromArgb(148, 163, 184);
+                restoreTimer.Stop();
+                restoreTimer.Dispose();
+            };
+            restoreTimer.Start();
+
+            Log.Information("Context cleared by user (checkpoint deleted, recent context reset)");
         }
 
         // ── Settings Panel ──────────────────────────────────────────────
@@ -291,7 +318,41 @@ namespace DesktopAgent
                 ? _selectedModel
                 : "qwen3-coder-32k";
 
-            var task = messageTextBox.Text.Trim();
+            // ── Checkpoint resume check ──────────────────────────────────────
+            List<ChatMessage>? resumeMessages = null;
+            string? resumeTask = null;
+            var checkpoint = CheckpointStore.Load();
+            if (checkpoint != null)
+            {
+                var preview = checkpoint.Task.Length > 100
+                    ? checkpoint.Task[..100] + "…"
+                    : checkpoint.Task;
+
+                var answer = MessageBox.Show(
+                    $"Yarım kalan bir görev bulundu:\n\n\"{preview}\"\n\n" +
+                    $"{checkpoint.StepCount} adım tamamlandı ({checkpoint.UpdatedAt:HH:mm:ss})\n\n" +
+                    $"Kaldığı yerden devam edilsin mi?",
+                    "Checkpoint Bulundu",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button1);
+
+                if (answer == DialogResult.Yes)
+                {
+                    resumeTask = checkpoint.Task;
+                    model = !string.IsNullOrWhiteSpace(checkpoint.Model) ? checkpoint.Model : model;
+                    resumeMessages = checkpoint.Messages
+                        .Select(m => new ChatMessage(m.Role, m.Content))
+                        .ToList();
+                }
+                else
+                {
+                    CheckpointStore.Delete();
+                }
+            }
+
+            // Task comes from checkpoint (resume) or text box (new task)
+            var task = resumeTask ?? messageTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(task))
             {
                 Log.Warning("Task submit ignored because input was empty");
@@ -299,12 +360,40 @@ namespace DesktopAgent
                 return;
             }
 
-            Log.Information("Task queued. Model: {Model}, TaskLength: {TaskLength}", model, task.Length);
+            Log.Information("Task queued. Model: {Model}, TaskLength: {TaskLength}, Resume: {Resume}",
+                model, task.Length, resumeMessages != null);
+
+            // Inject recent run history so the agent has cross-session context.
+            var recentRuns = AgentDatabase.GetRecentRuns(5);
+            if (recentRuns.Count > 0)
+            {
+                var ctx = string.Join("\n", recentRuns.Select(r =>
+                {
+                    var taskPreview = r.Task.Length > 80 ? r.Task[..80] + "…" : r.Task;
+                    var dur = r.DurationSeconds.HasValue ? $" {r.DurationSeconds:F0}s" : "";
+                    return $"- [{r.StartedAt:yyyy-MM-dd HH:mm}] {r.Status}{dur}: {taskPreview}";
+                }));
+                _agent.SetRecentContext(ctx);
+            }
 
             _agentCts?.Cancel();
             _agentCts = new CancellationTokenSource();
 
+            // ── Checkpoint data for this run ─────────────────────────────────
+            var checkpointData = new CheckpointData
+            {
+                TaskId    = checkpoint?.TaskId ?? Guid.NewGuid().ToString("N")[..8],
+                Task      = task,
+                Model     = model,
+                CreatedAt = checkpoint?.CreatedAt ?? DateTime.Now,
+            };
+
             // Display user input
+            if (resumeMessages != null)
+                AppendAgentLine("SYSTEM",
+                    $"Checkpoint'ten devam ediliyor — {checkpoint!.StepCount} adım geri yüklendi",
+                    Color.FromArgb(180, 83, 9));
+
             AppendAgentLine("USER", task, Color.FromArgb(100, 200, 255));
             AppendAgentLine("SESSION", $"Agent running... (Model: {model})", Color.FromArgb(30, 64, 175));
 
@@ -317,10 +406,34 @@ namespace DesktopAgent
                     if (step.Type is "tool_call" or "tool_result")
                         Log.Debug("Agent step {StepType}. Tool: {ToolName}", step.Type, step.ToolName ?? "-");
                     AppendAgent(step);
-                }, _agentCts.Token);
+                },
+                _agentCts.Token,
+                resumeMessages: resumeMessages,
+                onCheckpoint: msgs =>
+                {
+                    checkpointData.StepCount = msgs.Count(m => m.role == "assistant");
+                    checkpointData.Messages  = msgs
+                        .Select(m => new CheckpointMessage { Role = m.role, Content = m.content })
+                        .ToList();
+                    CheckpointStore.Save(checkpointData);
+                });
 
                 var duration = (DateTime.Now - _taskStartTime).TotalSeconds;
                 Log.Information("Task completed in {Duration:F1}s", duration);
+                CheckpointStore.Delete();
+                AgentDatabase.SaveRunHistory(new RunSummary
+                {
+                    TaskId          = checkpointData.TaskId,
+                    Task            = task,
+                    Model           = model,
+                    StartedAt       = _taskStartTime,
+                    CompletedAt     = DateTime.Now,
+                    DurationSeconds = duration,
+                    StepCount       = _currentRunSteps.Count,
+                    ToolCalls       = _currentRunSteps.Count(s => s.Type == "tool_call"),
+                    Errors          = _currentRunSteps.Count(s => s.Type == "tool_result" && s.Content.StartsWith("ERR")),
+                    Status          = "completed",
+                });
                 AppendAgentLine("SYSTEM", $"Tamamlandı — {duration:F1}s", Color.FromArgb(22, 101, 52));
                 _ = GenerateAndSaveReportAsync(task, model, _currentRunSteps.ToList(), duration);
             }
@@ -328,12 +441,42 @@ namespace DesktopAgent
             {
                 var duration = (DateTime.Now - _taskStartTime).TotalSeconds;
                 Log.Information("Task canceled by user after {Duration:F1}s", duration);
-                AppendAgentLine("SYSTEM", $"İptal edildi — {duration:F1}s", Color.FromArgb(180, 83, 9));
+                // Checkpoint is kept so the user can resume later.
+                AgentDatabase.SaveRunHistory(new RunSummary
+                {
+                    TaskId          = checkpointData.TaskId,
+                    Task            = task,
+                    Model           = model,
+                    StartedAt       = _taskStartTime,
+                    CompletedAt     = DateTime.Now,
+                    DurationSeconds = duration,
+                    StepCount       = _currentRunSteps.Count,
+                    ToolCalls       = _currentRunSteps.Count(s => s.Type == "tool_call"),
+                    Errors          = _currentRunSteps.Count(s => s.Type == "tool_result" && s.Content.StartsWith("ERR")),
+                    Status          = "cancelled",
+                });
+                AppendAgentLine("SYSTEM",
+                    $"İptal edildi — checkpoint kaydedildi, tekrar Send ile devam edebilirsiniz ({duration:F1}s)",
+                    Color.FromArgb(180, 83, 9));
             }
             catch (Exception ex)
             {
                 var duration = (DateTime.Now - _taskStartTime).TotalSeconds;
                 Log.Error(ex, "Task execution failed after {Duration:F1}s", duration);
+                // Checkpoint is kept so the user can attempt to resume after the error.
+                AgentDatabase.SaveRunHistory(new RunSummary
+                {
+                    TaskId          = checkpointData.TaskId,
+                    Task            = task,
+                    Model           = model,
+                    StartedAt       = _taskStartTime,
+                    CompletedAt     = DateTime.Now,
+                    DurationSeconds = duration,
+                    StepCount       = _currentRunSteps.Count,
+                    ToolCalls       = _currentRunSteps.Count(s => s.Type == "tool_call"),
+                    Errors          = _currentRunSteps.Count(s => s.Type == "tool_result" && s.Content.StartsWith("ERR")),
+                    Status          = "error",
+                });
                 AppendAgentLine("ERROR", $"{ex.Message} — {duration:F1}s", Color.FromArgb(185, 28, 28));
             }
             finally
