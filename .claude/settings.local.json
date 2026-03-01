@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build DesktopAgent.csproj)",
+      "Bash(powershell.exe -File \"D:\\\\AI\\\\DesktopAgent\\\\DesktopAgent\\\\readlog4.ps1\")"
+    ]
+  }
+}

@@ -7,10 +7,10 @@ public sealed class AppSettings
     public string OllamaBaseUrl { get; set; } = "http://localhost:11434";
     public string WorkspacePath { get; set; } = @"D:\\AI\\llmtest";
     public string SelectedModel { get; set; } = "";
-    public string SystemPrompt { get; set; } = @"Sen guclu bir yazilim gelistirme ajanisin.c#,html,css,jquery kullanabiliyorsun
-Arac cagirmak icin JSON kullan:
+    public string SystemPrompt { get; set; } = @"You are a powerful software development agent. You can use C#, HTML, CSS, and jQuery.
+Use JSON to call tools:
 {""tool"":""tool_name"",""args"":{...}}
-Final yanitini [YANIT] etiketi ile bitir.";
+End your final answer with the [DONE] tag.";
 }
 
 public static class AppSettingsStore
@@ -65,19 +65,19 @@ public static class AppSettingsStore
         var input = (value ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(input))
         {
-            error = "URL boş olamaz.";
+            error = "URL cannot be empty.";
             return false;
         }
 
         if (!Uri.TryCreate(input, UriKind.Absolute, out var uri))
         {
-            error = "Geçerli bir URL girin. Örn: http://localhost:11434";
+            error = "Enter a valid URL. Example: http://localhost:11434";
             return false;
         }
 
         if (uri.Scheme is not ("http" or "https"))
         {
-            error = "URL http:// veya https:// ile başlamalı.";
+            error = "URL must start with http:// or https://.";
             return false;
         }
 

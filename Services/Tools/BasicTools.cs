@@ -10,10 +10,12 @@ public class ReadFileTool : ITool
     public string Name => "read_file";
     public async Task<ToolResult> RunAsync(JsonElement args, CancellationToken ct)
     {
-        var path = args.GetProperty("path").GetString() ?? string.Empty;
+        if (!args.TryGetProperty("path", out var pathProp))
+            return new ToolResult(false, string.Empty, "Missing required argument: path");
+        var path = pathProp.GetString() ?? string.Empty;
         var full = PathHelper.Resolve(path);
         if (!File.Exists(full))
-            return new ToolResult(false, string.Empty, "Dosya bulunamadı");
+            return new ToolResult(false, string.Empty, "File not found");
         var text = await File.ReadAllTextAsync(full, ct);
         return new ToolResult(true, text);
     }
@@ -24,12 +26,18 @@ public class WriteFileTool : ITool
     public string Name => "write_file";
     public async Task<ToolResult> RunAsync(JsonElement args, CancellationToken ct)
     {
-        var path = args.GetProperty("path").GetString() ?? string.Empty;
-        var content = args.GetProperty("content").GetString() ?? string.Empty;
+        if (!args.TryGetProperty("path", out var pathProp))
+            return new ToolResult(false, string.Empty, "Missing required argument: path");
+        if (!args.TryGetProperty("content", out var contentProp))
+            return new ToolResult(false, string.Empty, "Missing required argument: content");
+        var path = pathProp.GetString() ?? string.Empty;
+        var content = contentProp.GetString() ?? string.Empty;
         var full = PathHelper.Resolve(path);
-        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        var directory = Path.GetDirectoryName(full);
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
         await File.WriteAllTextAsync(full, content, ct);
-        return new ToolResult(true, "Yazıldı");
+        return new ToolResult(true, "Written");
     }
 }
 
@@ -38,17 +46,30 @@ public class EditFileTool : ITool
     public string Name => "edit_file";
     public async Task<ToolResult> RunAsync(JsonElement args, CancellationToken ct)
     {
-        var path = args.GetProperty("path").GetString() ?? string.Empty;
-        var search = args.GetProperty("search").GetString() ?? string.Empty;
-        var replace = args.GetProperty("replace").GetString() ?? string.Empty;
+        if (!args.TryGetProperty("path", out var pathProp))
+            return new ToolResult(false, string.Empty, "Missing required argument: path");
+        if (!args.TryGetProperty("search", out var searchProp))
+            return new ToolResult(false, string.Empty, "Missing required argument: search");
+        if (!args.TryGetProperty("replace", out var replaceProp))
+            return new ToolResult(false, string.Empty, "Missing required argument: replace");
+        var path = pathProp.GetString() ?? string.Empty;
+        var search = searchProp.GetString() ?? string.Empty;
+        var replace = replaceProp.GetString() ?? string.Empty;
         var full = PathHelper.Resolve(path);
-        if (!File.Exists(full)) return new ToolResult(false, string.Empty, "Dosya yok");
+        if (!File.Exists(full)) return new ToolResult(false, string.Empty, "File not found");
         var text = await File.ReadAllTextAsync(full, ct);
-        if (!text.Contains(search))
-            return new ToolResult(false, string.Empty, "Aranan metin yok");
-        text = text.Replace(search, replace);
-        await File.WriteAllTextAsync(full, text, ct);
-        return new ToolResult(true, "Değiştirildi");
+
+        // Normalize line endings so that \r\n files match \n search strings from the model.
+        var normalizedText   = text.Replace("\r\n", "\n");
+        var normalizedSearch  = search.Replace("\r\n", "\n");
+        var normalizedReplace = replace.Replace("\r\n", "\n");
+
+        if (!normalizedText.Contains(normalizedSearch))
+            return new ToolResult(false, string.Empty, "Text not found");
+
+        var result = normalizedText.Replace(normalizedSearch, normalizedReplace);
+        await File.WriteAllTextAsync(full, result, ct);
+        return new ToolResult(true, "Modified");
     }
 }
 
@@ -57,14 +78,26 @@ public class ListFilesTool : ITool
     public string Name => "list_files";
     public Task<ToolResult> RunAsync(JsonElement args, CancellationToken ct)
     {
-        var path = args.TryGetProperty("path", out var p) ? p.GetString() ?? "." : ".";
-        var recursive = args.TryGetProperty("recursive", out var r) && r.GetBoolean();
-        var full = PathHelper.Resolve(path);
-        var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-        var items = Directory.Exists(full)
-            ? Directory.EnumerateFileSystemEntries(full, "*", option)
-            : Enumerable.Empty<string>();
-        return Task.FromResult(new ToolResult(true, string.Join(Environment.NewLine, items)));
+        try
+        {
+            var path = args.TryGetProperty("path", out var p) ? p.GetString() ?? "." : ".";
+            var recursive = args.TryGetProperty("recursive", out var r) && r.GetBoolean();
+            var full = PathHelper.Resolve(path);
+            var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+            if (!Directory.Exists(full))
+                return Task.FromResult(new ToolResult(false, string.Empty, $"Directory not found: {full}"));
+
+            var items = Directory.EnumerateFileSystemEntries(full, "*", option).ToList();
+            var output = items.Count == 0
+                ? $"(empty directory: {full})"
+                : string.Join(Environment.NewLine, items);
+
+            return Task.FromResult(new ToolResult(true, output));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new ToolResult(false, string.Empty, ex.Message));
+        }
     }
 }
 
@@ -73,10 +106,23 @@ public class RunTerminalTool : ITool
     public string Name => "run_terminal";
     public async Task<ToolResult> RunAsync(JsonElement args, CancellationToken ct)
     {
-        var command = args.GetProperty("command").GetString() ?? string.Empty;
-        var cwd = args.TryGetProperty("cwd", out var cwdProp)
-            ? cwdProp.GetString()
-            : WorkspaceContext.CurrentPath;
+        if (!args.TryGetProperty("command", out var commandProp))
+            return new ToolResult(false, string.Empty, "Missing required argument: command");
+        var command = commandProp.GetString() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(command))
+            return new ToolResult(false, string.Empty, "Command cannot be empty.");
+
+        var rawCwd = args.TryGetProperty("cwd", out var cwdProp) ? cwdProp.GetString() : null;
+        string cwd;
+        if (!string.IsNullOrWhiteSpace(rawCwd))
+        {
+            var resolved = PathHelper.Resolve(rawCwd);
+            cwd = Directory.Exists(resolved) ? resolved : WorkspaceContext.CurrentPath;
+        }
+        else
+        {
+            cwd = WorkspaceContext.CurrentPath;
+        }
 
         var runResult = await ProcessRunner.RunAsync(command, cwd, TimeSpan.FromSeconds(180), ct);
 
@@ -93,7 +139,7 @@ public class RunTerminalTool : ITool
         string? error = null;
         if (runResult.TimedOut)
         {
-            error = $"Komut zaman asimina ugradi. ExitCode: {runResult.ExitCode}";
+            error = $"Command timed out. ExitCode: {runResult.ExitCode}";
             if (!string.IsNullOrWhiteSpace(runResult.StdErr))
             {
                 error += $"{Environment.NewLine}{runResult.StdErr}";
@@ -106,7 +152,7 @@ public class RunTerminalTool : ITool
 
         if (!runResult.Success && string.IsNullOrWhiteSpace(error))
         {
-            error = $"Komut basarisiz. ExitCode: {runResult.ExitCode}";
+            error = $"Command failed. ExitCode: {runResult.ExitCode}";
         }
 
         return new ToolResult(runResult.Success, output, error);
@@ -118,22 +164,45 @@ public class SearchInFilesTool : ITool
     public string Name => "search_in_files";
     public Task<ToolResult> RunAsync(JsonElement args, CancellationToken ct)
     {
-        var query = args.GetProperty("query").GetString() ?? string.Empty;
-        var include = args.TryGetProperty("include", out var inc) ? inc.GetString() ?? "*.*" : "*.*";
-        var regex = new Regex(query, RegexOptions.Multiline);
-        var matches = new StringBuilder();
-
-        foreach (var file in Directory.EnumerateFiles(WorkspaceContext.CurrentPath, include, SearchOption.AllDirectories))
+        try
         {
-            if (ct.IsCancellationRequested) break;
-            var text = File.ReadAllText(file);
-            if (regex.IsMatch(text))
-            {
-                matches.AppendLine($"{file}");
-            }
-        }
+            if (!args.TryGetProperty("query", out var queryProp))
+                return Task.FromResult(new ToolResult(false, string.Empty, "Missing required argument: query"));
+            var query = queryProp.GetString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(query))
+                return Task.FromResult(new ToolResult(false, string.Empty, "Query cannot be empty."));
 
-        return Task.FromResult(new ToolResult(true, matches.ToString()));
+            var include = args.TryGetProperty("include", out var inc) ? inc.GetString() ?? "*.*" : "*.*";
+            if (!Directory.Exists(WorkspaceContext.CurrentPath))
+                return Task.FromResult(new ToolResult(false, string.Empty, $"Workspace not found: {WorkspaceContext.CurrentPath}"));
+
+            var regex = new Regex(query, RegexOptions.Multiline, TimeSpan.FromSeconds(2));
+            var matches = new StringBuilder();
+
+            foreach (var file in Directory.EnumerateFiles(WorkspaceContext.CurrentPath, include, SearchOption.AllDirectories))
+            {
+                if (ct.IsCancellationRequested)
+                    break;
+
+                try
+                {
+                    var text = File.ReadAllText(file);
+                    if (regex.IsMatch(text))
+                        matches.AppendLine(file);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Ignore unreadable files and continue scanning.
+                }
+            }
+
+            var output = matches.Length == 0 ? "(no matches)" : matches.ToString();
+            return Task.FromResult(new ToolResult(true, output));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new ToolResult(false, string.Empty, ex.Message));
+        }
     }
 }
 
@@ -142,10 +211,13 @@ public class CreateDirectoryTool : ITool
     public string Name => "create_directory";
     public Task<ToolResult> RunAsync(JsonElement args, CancellationToken ct)
     {
-        var path = args.GetProperty("path").GetString() ?? string.Empty;
+        // accept both "path" and "name" (model sometimes uses "name")
+        if (!args.TryGetProperty("path", out var pathProp) && !args.TryGetProperty("name", out pathProp))
+            return Task.FromResult(new ToolResult(false, string.Empty, "Missing required argument: path"));
+        var path = pathProp.GetString() ?? string.Empty;
         var full = PathHelper.Resolve(path);
         Directory.CreateDirectory(full);
-        return Task.FromResult(new ToolResult(true, "Oluşturuldu"));
+        return Task.FromResult(new ToolResult(true, "Created"));
     }
 }
 
@@ -154,7 +226,7 @@ public class GetDiagnosticsTool : ITool
     public string Name => "get_diagnostics";
     public Task<ToolResult> RunAsync(JsonElement args, CancellationToken ct)
     {
-        return Task.FromResult(new ToolResult(true, "WinForms ortamında VS Code diagnostikleri yok."));
+        return Task.FromResult(new ToolResult(true, "VS Code diagnostics are not available in WinForms environment."));
     }
 }
 
@@ -163,7 +235,7 @@ public class GetOpenFileInfoTool : ITool
     public string Name => "get_open_file_info";
     public Task<ToolResult> RunAsync(JsonElement args, CancellationToken ct)
     {
-        return Task.FromResult(new ToolResult(true, "Aktif editör bilgisi yok (WinForms)."));
+        return Task.FromResult(new ToolResult(true, "No active editor information available (WinForms)."));
     }
 }
 
@@ -172,7 +244,7 @@ public class InsertCodeTool : ITool
     public string Name => "insert_code";
     public Task<ToolResult> RunAsync(JsonElement args, CancellationToken ct)
     {
-        return Task.FromResult(new ToolResult(true, "InsertCode desteklenmiyor (yalnızca VS Code)."));
+        return Task.FromResult(new ToolResult(true, "InsertCode is not supported (VS Code only)."));
     }
 }
 
@@ -180,6 +252,9 @@ internal static class PathHelper
 {
     public static string Resolve(string path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+            return WorkspaceContext.CurrentPath;
+
         if (Path.IsPathRooted(path)) return path;
         return Path.GetFullPath(Path.Combine(WorkspaceContext.CurrentPath, path));
     }

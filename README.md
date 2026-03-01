@@ -107,9 +107,9 @@ User -> AgentForm -> AgentService -> OllamaClient -> Ollama LLM
 **Agentic loop:**
 1. User enters a task.
 2. AgentService sends a request to the LLM with system prompt + task.
-3. The LLM returns either a tool call (`{"tool":"...", "args":{...}}`) or a final response (`[YANIT]`).
+3. The LLM returns either a tool call (`{"tool":"...", "args":{...}}`) or a final response (`[DONE]`).
 4. If there is a tool call: ToolRegistry executes it and sends the result back to the LLM.
-5. The loop continues until `[YANIT]` is produced.
+5. The loop continues until `[DONE]` is produced.
 
 ## Project Structure
 

@@ -24,6 +24,7 @@ namespace DesktopAgent.Services
         public OllamaClient(string baseUrl = "http://localhost:11434")
         {
             _http = new HttpClient();
+            _http.Timeout = TimeSpan.FromMinutes(10);
             SetBaseUrl(baseUrl);
         }
 
@@ -32,10 +33,10 @@ namespace DesktopAgent.Services
         public void SetBaseUrl(string baseUrl)
         {
             if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
-                throw new ArgumentException("Geçerli bir URL girin. Örn: http://localhost:11434", nameof(baseUrl));
+                throw new ArgumentException("Enter a valid URL. Example: http://localhost:11434", nameof(baseUrl));
 
             if (uri.Scheme is not ("http" or "https"))
-                throw new ArgumentException("URL http:// veya https:// ile başlamalı.", nameof(baseUrl));
+                throw new ArgumentException("URL must start with http:// or https://.", nameof(baseUrl));
 
             _baseUrl = uri.GetLeftPart(UriPartial.Authority);
         }
@@ -86,8 +87,13 @@ namespace DesktopAgent.Services
             }
 
             var json = await resp.Content.ReadFromJsonAsync<JsonElement>(options: _json, cancellationToken: ct);
-            Log.Information("Ollama chat response json", json);
-            return json.GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
+            Log.Information("Ollama chat response received. Endpoint: {Endpoint}, Model: {Model}", endpoint, model);
+            if (!json.TryGetProperty("message", out var message) || !message.TryGetProperty("content", out var content))
+                return string.Empty;
+
+            var reply = content.GetString() ?? string.Empty;
+            Log.Debug("Ollama chat response content: {Content}", reply);
+            return reply;
         }
 
         private Uri BuildUri(string path)

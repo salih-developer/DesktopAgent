@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using DesktopAgent.Services;
 using DesktopAgent.Services.Tools;
 using DesktopAgent.Utils;
@@ -13,6 +15,13 @@ namespace DesktopAgent
         private readonly AgentService _agent;
         private AppSettings _settings;
         private string _selectedModel = "";
+        private bool _isAgentRunning = false;
+        private System.Windows.Forms.Timer _elapsedTimer = null!;
+        private DateTime _taskStartTime;
+        private DateTime _lastStepTime;
+
+        private record StepRecord(string Type, string Content, string? Detail, string? ToolName, DateTime Timestamp, double DeltaSeconds);
+        private readonly List<StepRecord> _currentRunSteps = new();
 
         public AgentForm()
         {
@@ -42,8 +51,26 @@ namespace DesktopAgent
             InitializeComponent();
             DoubleBuffered = true;
 
+            // Load app icon
+            var icoPath = Path.Combine(AppContext.BaseDirectory, "app.ico");
+            var appIcon = File.Exists(icoPath) ? new Icon(icoPath) : SystemIcons.Application;
+            Icon = appIcon;
+            trayIcon.Icon = appIcon;
+
+            // Tray menu setup
+            trayMenu.Items.Add("Open", null, (s, e) => { Show(); WindowState = FormWindowState.Normal; Activate(); });
+            trayMenu.Items.Add("-");
+            trayMenu.Items.Add("Exit", null, (s, e) => { trayIcon.Visible = false; Application.Exit(); });
+            trayIcon.DoubleClick += (s, e) => { Show(); WindowState = FormWindowState.Normal; Activate(); };
+
             _selectedModel = _settings.SelectedModel;
             messageTextBox.KeyDown += txtTask_KeyDown;
+
+            _elapsedTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+            _elapsedTimer.Tick += ElapsedTimer_Tick;
+
+            rtbAgent.DetectUrls = true;
+            rtbAgent.LinkClicked += RtbAgent_LinkClicked;
 
             // Center settings panel on resize
             Resize += (_, _) => CenterSettingsPanel();
@@ -52,6 +79,18 @@ namespace DesktopAgent
                 "AgentForm initialized. WorkspacePath: {WorkspacePath}, OllamaBaseUrl: {OllamaBaseUrl}",
                 _settings.WorkspacePath,
                 _settings.OllamaBaseUrl);
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                Hide();
+                trayIcon.ShowBalloonTip(1500, "Desktop Agent", "Application minimized to system tray.", ToolTipIcon.Info);
+                return;
+            }
+            base.OnFormClosing(e);
         }
 
         private void CenterSettingsPanel()
@@ -69,6 +108,12 @@ namespace DesktopAgent
             ollamaUrlTextBox.Text = _settings.OllamaBaseUrl;
             workspaceTextBox.Text = _settings.WorkspacePath;
             systemPromptTextBox.Text = _settings.SystemPrompt;
+            modelComboBox.Items.Clear();
+            if (!string.IsNullOrWhiteSpace(_selectedModel))
+            {
+                modelComboBox.Items.Add(_selectedModel);
+                modelComboBox.SelectedItem = _selectedModel;
+            }
 
             CenterSettingsPanel();
             settingsOverlayPanel.Visible = true;
@@ -93,6 +138,7 @@ namespace DesktopAgent
             var url = ollamaUrlTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(url)) return;
 
+            var previousSelection = modelComboBox.SelectedItem?.ToString();
             fetchModelsButton.Enabled = false;
             fetchModelsButton.Text = "...";
             modelComboBox.Items.Clear();
@@ -110,6 +156,8 @@ namespace DesktopAgent
                 // Try to select the currently active model
                 if (!string.IsNullOrEmpty(_selectedModel) && modelComboBox.Items.Contains(_selectedModel))
                     modelComboBox.SelectedItem = _selectedModel;
+                else if (!string.IsNullOrEmpty(previousSelection) && modelComboBox.Items.Contains(previousSelection))
+                    modelComboBox.SelectedItem = previousSelection;
                 else if (modelComboBox.Items.Count > 0)
                     modelComboBox.SelectedIndex = 0;
             }
@@ -117,14 +165,14 @@ namespace DesktopAgent
             {
                 Log.Warning(ex, "Failed to fetch models from {Url}", url);
                 MessageBox.Show(
-                    $"Model listesi alinamadi:\n{ex.Message}",
-                    "Hata",
+                    $"Failed to fetch model list:\n{ex.Message}",
+                    "Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
             }
             finally
             {
-                fetchModelsButton.Text = "Listele";
+                fetchModelsButton.Text = "List";
                 fetchModelsButton.Enabled = true;
             }
         }
@@ -133,7 +181,7 @@ namespace DesktopAgent
         {
             using var dialog = new FolderBrowserDialog
             {
-                Description = "Workspace dizinini secin",
+                Description = "Select workspace directory",
                 UseDescriptionForTitle = true,
                 ShowNewFolderButton = true
             };
@@ -150,7 +198,7 @@ namespace DesktopAgent
             // Validate URL
             if (!AppSettingsStore.TryNormalizeBaseUrl(ollamaUrlTextBox.Text, out var normalizedUrl, out var urlError))
             {
-                MessageBox.Show(urlError, "Hata", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(urlError, "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -158,7 +206,13 @@ namespace DesktopAgent
             var workspace = AppSettingsStore.NormalizeWorkspacePath(workspaceTextBox.Text);
 
             // Get selected model
-            var selectedModel = modelComboBox.SelectedItem?.ToString() ?? "";
+            var selectedModel = modelComboBox.SelectedItem?.ToString();
+            if (string.IsNullOrWhiteSpace(selectedModel))
+            {
+                selectedModel = _selectedModel;
+            }
+
+            selectedModel ??= string.Empty;
             var systemPrompt = systemPromptTextBox.Text.Trim();
 
             // Apply
@@ -176,7 +230,7 @@ namespace DesktopAgent
             settingsOverlayPanel.Visible = false;
 
             AppendAgentLine("SYSTEM",
-                $"Ayarlar kaydedildi. Model: {selectedModel}, URL: {normalizedUrl}, Workspace: {workspace}",
+                $"Settings saved. Model: {selectedModel}, URL: {normalizedUrl}, Workspace: {workspace}",
                 Color.FromArgb(180, 83, 9));
 
             Log.Information("Settings saved. Model: {Model}, URL: {Url}, Workspace: {Workspace}",
@@ -190,13 +244,48 @@ namespace DesktopAgent
             if (e.KeyCode == Keys.Enter && !e.Shift)
             {
                 e.SuppressKeyPress = true;
-                if (sendButton.Enabled)
-                    sendButton.PerformClick();
+                sendButton.PerformClick();
+            }
+        }
+
+        private void ElapsedTimer_Tick(object? sender, EventArgs e)
+        {
+            var elapsed = DateTime.Now - _taskStartTime;
+            timerLabel.Text = $"⏱ {(int)elapsed.TotalMinutes:D2}:{elapsed.Seconds:D2}";
+        }
+
+        private void SetRunningState(bool running)
+        {
+            _isAgentRunning = running;
+            if (running)
+            {
+                _taskStartTime = DateTime.Now;
+                _lastStepTime = _taskStartTime;
+                _currentRunSteps.Clear();
+                _elapsedTimer.Start();
+                timerLabel.Text = "⏱ 00:00";
+                timerLabel.Visible = true;
+                sendButton.Text = "■";
+                sendButton.BackColor = Color.FromArgb(185, 28, 28);
+            }
+            else
+            {
+                _elapsedTimer.Stop();
+                timerLabel.Visible = false;
+                sendButton.Text = ">";
+                sendButton.BackColor = Color.FromArgb(210, 113, 69);
             }
         }
 
         private async void sendButton_Click(object sender, EventArgs e)
         {
+            // If agent is running, cancel it
+            if (_isAgentRunning)
+            {
+                _agentCts?.Cancel();
+                return;
+            }
+
             // Use selected model, fallback to default
             string model = !string.IsNullOrWhiteSpace(_selectedModel)
                 ? _selectedModel
@@ -206,7 +295,7 @@ namespace DesktopAgent
             if (string.IsNullOrWhiteSpace(task))
             {
                 Log.Warning("Task submit ignored because input was empty");
-                MessageBox.Show("Lutfen bir gorev yazin.", "Uyari", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Please enter a task.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -215,32 +304,41 @@ namespace DesktopAgent
             _agentCts?.Cancel();
             _agentCts = new CancellationTokenSource();
 
-            AppendAgentLine("SESSION", $"Agent calisiyor... (Model: {model})", Color.FromArgb(30, 64, 175));
+            // Display user input
+            AppendAgentLine("USER", task, Color.FromArgb(100, 200, 255));
+            AppendAgentLine("SESSION", $"Agent running... (Model: {model})", Color.FromArgb(30, 64, 175));
 
+            SetRunningState(true);
             try
             {
                 messageTextBox.Text = string.Empty;
-                await foreach (var step in _agent.RunAsync(model, task, _agentCts.Token))
+                await _agent.RunAsync(model, task, step =>
                 {
                     if (step.Type is "tool_call" or "tool_result")
-                    {
                         Log.Debug("Agent step {StepType}. Tool: {ToolName}", step.Type, step.ToolName ?? "-");
-                    }
-
                     AppendAgent(step);
-                }
+                }, _agentCts.Token);
 
-                Log.Information("Task completed successfully");
+                var duration = (DateTime.Now - _taskStartTime).TotalSeconds;
+                Log.Information("Task completed in {Duration:F1}s", duration);
+                AppendAgentLine("SYSTEM", $"Tamamlandı — {duration:F1}s", Color.FromArgb(22, 101, 52));
+                _ = GenerateAndSaveReportAsync(task, model, _currentRunSteps.ToList(), duration);
             }
             catch (OperationCanceledException)
             {
-                Log.Information("Task canceled by user");
-                AppendAgentLine("SYSTEM", "Gorev iptal edildi.", Color.FromArgb(180, 83, 9));
+                var duration = (DateTime.Now - _taskStartTime).TotalSeconds;
+                Log.Information("Task canceled by user after {Duration:F1}s", duration);
+                AppendAgentLine("SYSTEM", $"İptal edildi — {duration:F1}s", Color.FromArgb(180, 83, 9));
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Task execution failed");
-                AppendAgentLine("ERROR", ex.Message, Color.FromArgb(185, 28, 28));
+                var duration = (DateTime.Now - _taskStartTime).TotalSeconds;
+                Log.Error(ex, "Task execution failed after {Duration:F1}s", duration);
+                AppendAgentLine("ERROR", $"{ex.Message} — {duration:F1}s", Color.FromArgb(185, 28, 28));
+            }
+            finally
+            {
+                SetRunningState(false);
             }
         }
 
@@ -252,21 +350,168 @@ namespace DesktopAgent
                 return;
             }
 
+            var now = DateTime.Now;
+            var delta = (now - _lastStepTime).TotalSeconds;
+            _lastStepTime = now;
+            _currentRunSteps.Add(new StepRecord(step.Type, step.Content, step.Detail, step.ToolName, now, delta));
+
+            // llm_reply is captured for reports but not shown in the chat UI.
+            if (step.Type == "llm_reply")
+                return;
+
             var label = step.Type.ToUpperInvariant();
             var color = step.Type switch
             {
-                "thinking" => Color.FromArgb(3, 105, 161),
-                "tool_call" => Color.FromArgb(79, 70, 229),
+                "thinking"    => Color.FromArgb(3, 105, 161),
+                "tool_call"   => Color.FromArgb(79, 70, 229),
                 "tool_result" => Color.FromArgb(22, 101, 52),
-                "response" => Color.FromArgb(30, 41, 59),
-                _ => Color.FromArgb(30, 41, 59)
+                "response"    => Color.FromArgb(30, 41, 59),
+                _             => Color.FromArgb(30, 41, 59)
             };
 
             var content = step.Content;
             if (!string.IsNullOrWhiteSpace(step.ToolName))
                 content = $"{content} | Tool: {step.ToolName}";
 
-            AppendAgentLine(label, content, color);
+            var deltaStr = delta >= 0.1 ? $" (+{delta:F1}s)" : "";
+            AppendAgentLine(label, content + deltaStr, color);
+        }
+
+        private async Task GenerateAndSaveReportAsync(string userTask, string model, List<StepRecord> steps, double totalSeconds)
+        {
+            try
+            {
+                var reportsDir = Path.Combine(AppContext.BaseDirectory, "reports");
+                Directory.CreateDirectory(reportsDir);
+
+                var fileTs = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+                var filePath = Path.Combine(reportsDir, $"report-{fileTs}.md");
+
+                var toolCallCount = steps.Count(s => s.Type == "tool_call");
+                var errCount      = steps.Count(s => s.Type == "tool_result" && s.Content.StartsWith("ERR"));
+                var finalResponse = steps.LastOrDefault(s => s.Type == "response")?.Content ?? "(no response)";
+
+                // ── Detailed timeline (markdown with collapsible detail blocks) ──
+                var timeline = new StringBuilder();
+                foreach (var s in steps)
+                {
+                    var tool   = s.ToolName != null ? $" `{s.ToolName}`" : "";
+                    var dur    = s.DeltaSeconds >= 0.1 ? $" **+{s.DeltaSeconds:F1}s**" : "";
+                    var brief  = s.Content.Replace("\n", " ").Replace("\r", "");
+                    if (brief.Length > 120) brief = brief[..120] + "…";
+
+                    timeline.AppendLine($"### `{s.Timestamp:HH:mm:ss}` {s.Type.ToUpperInvariant()}{tool}{dur}");
+                    timeline.AppendLine();
+                    timeline.AppendLine(brief);
+                    timeline.AppendLine();
+
+                    if (!string.IsNullOrWhiteSpace(s.Detail) && s.Detail != s.Content)
+                    {
+                        var detailLabel = s.Type switch
+                        {
+                            "llm_reply"   => "Full LLM Response",
+                            "tool_call"   => "Tool Arguments (JSON)",
+                            "tool_result" => "Full Tool Output",
+                            "response"    => "Final Response",
+                            _             => "Detail"
+                        };
+                        timeline.AppendLine($"<details><summary>{detailLabel}</summary>");
+                        timeline.AppendLine();
+                        timeline.AppendLine("```");
+                        timeline.AppendLine(s.Detail);
+                        timeline.AppendLine("```");
+                        timeline.AppendLine();
+                        timeline.AppendLine("</details>");
+                        timeline.AppendLine();
+                    }
+                }
+
+                // ── LLM summary ───────────────────────────────────────────
+                var summaryPrompt = $"""
+You are a developer assistant. Analyze this AI agent run log and write a concise developer report in Markdown.
+
+Include exactly these sections:
+## Summary
+One sentence describing what was accomplished.
+
+## Actions Taken
+Bullet list of each tool call and what it did.
+
+## Outcome
+Was the task completed successfully? Any errors?
+
+## Metrics
+- Total time: {totalSeconds:F1}s
+- Tool calls: {toolCallCount}
+- Errors: {errCount}
+
+--- RAW TIMELINE ---
+{timeline}
+
+--- FINAL RESPONSE ---
+{finalResponse}
+--- END ---
+
+Write the developer report now. Use markdown. Be concise.
+""";
+
+                string summary;
+                try
+                {
+                    var msgs = new List<ChatMessage> { new("user", summaryPrompt) };
+                    summary = await _ollama.ChatAsync(model, msgs, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "LLM summarization failed, using raw report");
+                    summary = $"*(LLM summarization failed: {ex.Message})*";
+                }
+
+                // ── Final markdown file ───────────────────────────────────
+                var report = new StringBuilder();
+                report.AppendLine($"# Agent Run Report — {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                report.AppendLine();
+                report.AppendLine($"**Model:** {model}  ");
+                report.AppendLine($"**Total Duration:** {totalSeconds:F1}s  ");
+                report.AppendLine($"**Tool Calls:** {toolCallCount}  ");
+                report.AppendLine($"**Errors:** {errCount}  ");
+                report.AppendLine();
+                report.AppendLine("## Task");
+                report.AppendLine();
+                report.AppendLine(userTask);
+                report.AppendLine();
+                report.AppendLine("## Developer Summary");
+                report.AppendLine();
+                report.AppendLine(summary);
+                report.AppendLine();
+                report.AppendLine("---");
+                report.AppendLine();
+                report.AppendLine("## Detailed Timeline");
+                report.AppendLine();
+                report.Append(timeline);
+
+                await File.WriteAllTextAsync(filePath, report.ToString());
+                Log.Information("Report saved to {FilePath}", filePath);
+                var fileUri = new Uri(filePath).AbsoluteUri;
+                AppendAgentLine("SYSTEM", $"📄 Report: {fileUri}", Color.FromArgb(180, 83, 9));
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to generate run report");
+            }
+        }
+
+        private void RtbAgent_LinkClicked(object? sender, LinkClickedEventArgs e)
+        {
+            var link = e.LinkText ?? string.Empty;
+            try
+            {
+                Process.Start(new ProcessStartInfo(link) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to open link: {Link}", link);
+            }
         }
 
         private void AppendAgentLine(string label, string content, Color color)

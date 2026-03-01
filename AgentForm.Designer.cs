@@ -7,6 +7,9 @@ namespace DesktopAgent
         /// </summary>
         private System.ComponentModel.IContainer components = null;
 
+        private NotifyIcon trayIcon = null!;
+        private ContextMenuStrip trayMenu = null!;
+
         private Panel headerPanel = null!;
         private Label sessionLabel = null!;
         private Label sessionArrowLabel = null!;
@@ -16,6 +19,7 @@ namespace DesktopAgent
         private TextBox messageTextBox = null!;
         private Panel composerFooterPanel = null!;
         private CheckBox askBeforeEditsCheckBox = null!;
+        private Label timerLabel = null!;
         private Button sendButton = null!;
 
         // Settings panel controls
@@ -41,9 +45,11 @@ namespace DesktopAgent
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                trayIcon?.Dispose();
+                trayMenu?.Dispose();
+                components?.Dispose();
             }
 
             base.Dispose(disposing);
@@ -57,6 +63,7 @@ namespace DesktopAgent
         /// </summary>
         private void InitializeComponent()
         {
+            components = new System.ComponentModel.Container();
             headerPanel = new Panel();
             sessionLabel = new Label();
             sessionArrowLabel = new Label();
@@ -66,6 +73,7 @@ namespace DesktopAgent
             messageTextBox = new TextBox();
             composerFooterPanel = new Panel();
             askBeforeEditsCheckBox = new CheckBox();
+            timerLabel = new Label();
             sendButton = new Button();
             rtbAgent = new RichTextBox();
             settingsOverlayPanel = new Panel();
@@ -83,6 +91,8 @@ namespace DesktopAgent
             systemPromptTextBox = new TextBox();
             saveSettingsButton = new Button();
             closeSettingsButton = new Button();
+            trayMenu = new ContextMenuStrip(components);
+            trayIcon = new NotifyIcon(components);
             headerPanel.SuspendLayout();
             composerPanel.SuspendLayout();
             composerCard.SuspendLayout();
@@ -148,7 +158,7 @@ namespace DesktopAgent
             composerPanel.BackColor = Color.FromArgb(12, 15, 20);
             composerPanel.Controls.Add(composerCard);
             composerPanel.Dock = DockStyle.Bottom;
-            composerPanel.Location = new Point(0, 803);
+            composerPanel.Location = new Point(0, 610);
             composerPanel.Name = "composerPanel";
             composerPanel.Padding = new Padding(12, 6, 12, 12);
             composerPanel.Size = new Size(690, 91);
@@ -178,10 +188,12 @@ namespace DesktopAgent
             messageTextBox.PlaceholderText = "Queue another message...";
             messageTextBox.Size = new Size(646, 18);
             messageTextBox.TabIndex = 0;
+            messageTextBox.Text = "can you create a project with asp.net core?";
             // 
             // composerFooterPanel
             // 
             composerFooterPanel.Controls.Add(askBeforeEditsCheckBox);
+            composerFooterPanel.Controls.Add(timerLabel);
             composerFooterPanel.Controls.Add(sendButton);
             composerFooterPanel.Dock = DockStyle.Bottom;
             composerFooterPanel.Location = new Point(10, 37);
@@ -202,9 +214,23 @@ namespace DesktopAgent
             askBeforeEditsCheckBox.TabIndex = 0;
             askBeforeEditsCheckBox.Text = "Ask before edits";
             askBeforeEditsCheckBox.UseVisualStyleBackColor = true;
-            // 
+            //
+            // timerLabel
+            //
+            timerLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            timerLabel.AutoSize = false;
+            timerLabel.Font = new Font("Segoe UI", 8.5F);
+            timerLabel.ForeColor = Color.FromArgb(100, 160, 220);
+            timerLabel.Location = new Point(484, 6);
+            timerLabel.Name = "timerLabel";
+            timerLabel.Size = new Size(130, 16);
+            timerLabel.TabIndex = 6;
+            timerLabel.Text = "";
+            timerLabel.TextAlign = ContentAlignment.MiddleRight;
+            timerLabel.Visible = false;
+            //
             // sendButton
-            // 
+            //
             sendButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             sendButton.BackColor = Color.FromArgb(210, 113, 69);
             sendButton.Cursor = Cursors.Hand;
@@ -230,7 +256,7 @@ namespace DesktopAgent
             rtbAgent.Margin = new Padding(3, 2, 3, 2);
             rtbAgent.Name = "rtbAgent";
             rtbAgent.ReadOnly = true;
-            rtbAgent.Size = new Size(690, 757);
+            rtbAgent.Size = new Size(690, 564);
             rtbAgent.TabIndex = 3;
             rtbAgent.Text = "";
             // 
@@ -241,7 +267,7 @@ namespace DesktopAgent
             settingsOverlayPanel.Dock = DockStyle.Fill;
             settingsOverlayPanel.Location = new Point(0, 46);
             settingsOverlayPanel.Name = "settingsOverlayPanel";
-            settingsOverlayPanel.Size = new Size(690, 757);
+            settingsOverlayPanel.Size = new Size(690, 564);
             settingsOverlayPanel.TabIndex = 10;
             settingsOverlayPanel.Visible = false;
             settingsOverlayPanel.Click += closeSettingsButton_Click;
@@ -263,7 +289,7 @@ namespace DesktopAgent
             settingsInnerPanel.Controls.Add(systemPromptTextBox);
             settingsInnerPanel.Controls.Add(saveSettingsButton);
             settingsInnerPanel.Controls.Add(closeSettingsButton);
-            settingsInnerPanel.Location = new Point(245, 328);
+            settingsInnerPanel.Location = new Point(226, 56);
             settingsInnerPanel.Name = "settingsInnerPanel";
             settingsInnerPanel.Padding = new Padding(24);
             settingsInnerPanel.Size = new Size(440, 430);
@@ -431,12 +457,23 @@ namespace DesktopAgent
             closeSettingsButton.UseVisualStyleBackColor = false;
             closeSettingsButton.Click += closeSettingsButton_Click;
             // 
+            // trayMenu
+            // 
+            trayMenu.Name = "trayMenu";
+            trayMenu.Size = new Size(61, 4);
+            // 
+            // trayIcon
+            // 
+            trayIcon.ContextMenuStrip = trayMenu;
+            trayIcon.Text = "Desktop Agent";
+            trayIcon.Visible = true;
+            // 
             // AgentForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(12, 15, 20);
-            ClientSize = new Size(690, 894);
+            ClientSize = new Size(690, 701);
             Controls.Add(settingsOverlayPanel);
             Controls.Add(rtbAgent);
             Controls.Add(composerPanel);

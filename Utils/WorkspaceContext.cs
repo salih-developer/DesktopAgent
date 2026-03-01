@@ -9,6 +9,16 @@ public static class WorkspaceContext
     public static void Set(string path)
     {
         var normalized = AppSettingsStore.NormalizeWorkspacePath(path);
-        _currentPath = normalized;
+        try
+        {
+            Directory.CreateDirectory(normalized);
+            _currentPath = normalized;
+        }
+        catch
+        {
+            var fallback = AppSettingsStore.NormalizeWorkspacePath(Environment.CurrentDirectory);
+            Directory.CreateDirectory(fallback);
+            _currentPath = fallback;
+        }
     }
 }

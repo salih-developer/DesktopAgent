@@ -33,14 +33,14 @@ DesktopAgent/
 
 ## Architecture
 - **AgentForm** -> Receives user messages and sends them to AgentService. The settings panel (gear button) configures Ollama URL, model, workspace, and system prompt.
-- **AgentService** -> Agentic loop: sends prompts to the LLM, parses replies, executes tool calls, and feeds tool output back. The loop ends when `[YANIT]` is returned. The system prompt can be changed externally via `SetSystemPrompt()`.
+- **AgentService** -> Agentic loop: sends prompts to the LLM, parses replies, executes tool calls, and feeds tool output back. The loop ends when `[DONE]` is returned. The system prompt can be changed externally via `SetSystemPrompt()`.
 - **ToolRegistry** -> Registers and executes tools implementing the `ITool` interface.
 - **OllamaClient** -> Communicates with Ollama REST API. URL can be changed with `SetBaseUrl()`. Available models can be listed with `ListModelsAsync()`.
 
 ## Key Conventions
 - All UI text and default system prompt are Turkish.
 - Tool calls use JSON format: `{"tool":"tool_name","args":{...}}`
-- Final response ends with `[YANIT]`.
+- Final response ends with `[DONE]`.
 - Relative paths are resolved against the workspace directory (`PathHelper.Resolve`).
 - Settings are stored in `%APPDATA%/OllamaWin/settings.json`.
 - Model is selected in the settings panel (fallback: `qwen3-coder-32k`).
